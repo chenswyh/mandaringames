@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh"><head><meta charset="UTF-8"><title>Book 1 Lesson 1 - 打地鼠中文聽力遊戲</title>
+<style>
+body{font-family:Arial;text-align:center;background:#f0f8ff;background-image:url("images/default_bg.jpg");background-size:cover;background-position:center;}
+#game{display:grid;grid-template-columns:repeat(3,120px);gap:15px;justify-content:center;margin-top:20px;}
+.hole{width:120px;height:120px;border:2px solid #333;background:#ddd;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+.hole img{width:100px;height:100px;}
+#status{margin-top:20px;font-size:18px;color:#000;}
+#leaderboard{margin-top:20px;background:#fff;padding:10px;border:2px solid #333;display:none;}
+#startScreen{margin-top:40px;}
+#endPopup{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);justify-content:center;align-items:center;}
+#endPopupContent{background:#fff;padding:20px;border-radius:10px;text-align:center;min-width:250px;}
+#endPopupContent h2{margin:0 0 10px 0;}
+</style></head><body>
+<h1>🎯 Book 1 Lesson 1 - 打地鼠中文聽力遊戲</h1>
+<div id="startScreen"><label>請輸入玩家姓名：(Your Name)</label><input type="text" id="playerName" placeholder="輸入名字"><button onclick="startGame()">Start</button></div>
+<div id="status" style="display:none;">分數：<span id="score">0</span> | 答對：<span id="matched">0</span> | 答錯：<span id="wrong">0</span> | 倒數：<span id="time">90</span> 秒</div>
+<div id="game"></div>
+<div id="leaderboard"><h2>🏆 排行榜</h2><table border="1" style="margin:auto;"><thead><tr><th>玩家</th><th>答對</th><th>答錯</th><th>分數</th><th>時間(秒)</th></tr></thead><tbody id="rankings"></tbody></table></div>
+<audio id="bgm" src="audio/default_bgm.mp3" loop></audio>
+<audio id="correctSound" src="audio/default_correct.mp3"></audio>
+<audio id="wrongSound" src="audio/default_wrong.mp3"></audio>
+<div id="endPopup"><div id="endPopupContent"><h2>🎉 遊戲結束 (Game Over)</h2><div id="endPopupText"></div><button onclick="closeEndPopup()">確定 / OK</button></div></div>
+<script>
+const wordPairs=[{"zh":"您好","en":"Hello","img":"images/mole1.png"},{"zh":"我姓王","en":"My last name is Wang","img":"images/mole2.png"},{"zh":"您貴姓","en":"What's your last name?","img":"images/mole3.png"},{"zh":"我是美國人","en":"I am American","img":"images/mole4.png"},{"zh":"我是台灣人","en":"I am Taiwanese","img":"images/mole5.png"},{"zh":"您叫什麼名字","en":"What's your name","img":"images/mole6.png"}];
+let gridSize=3,simultaneousMoles=6,totalTime=90,mp3Interval=12,ttsRate=0.8,moleDuration=8000,moleInterval=8000,delayAfterTTS=1000;
+let matched=0,wrong=0,timeLeft=totalTime,timer=null,mp3Timer=null,roundTimer=null,delayedMoleTimer=null,currentWord=null,lastWord=null,player="";
+const ttsLang="zh-TW";
+function startGame(){
+  matched=0; wrong=0; timeLeft=totalTime;
+  document.getElementById("score").textContent=0; document.getElementById("matched").textContent=0; document.getElementById("wrong").textContent=0; document.getElementById("time").textContent=timeLeft;
+  player=document.getElementById("playerName").value||"匿名玩家"; document.getElementById("playerName").value="";
+  document.getElementById("startScreen").style.display="none"; document.getElementById("status").style.display="block"; document.getElementById("leaderboard").style.display="none";
+  const gameDiv=document.getElementById("game"); gameDiv.innerHTML="";
+  for(let i=0;i<gridSize*gridSize;i++){const d=document.createElement("div"); d.className="hole"; d.dataset.id=i; d.onclick=()=>clickHole(i); gameDiv.appendChild(d);}
+  document.getElementById("bgm").play(); nextWord();
+  timer=setInterval(updateTimer,1000); mp3Timer=setInterval(()=>{nextWord();},mp3Interval*1000);
+}
+function speakWord(w){const msg=new SpeechSynthesisUtterance(w.zh);msg.lang=ttsLang;msg.rate=ttsRate;window.speechSynthesis.speak(msg);}
+function nextWord(){
+  if(timeLeft <= 0) return;
+  let newWord; do{newWord=wordPairs[Math.floor(Math.random()*wordPairs.length)];} while(lastWord&&newWord.zh===lastWord.zh);
+  currentWord=newWord; lastWord=newWord;
+  document.querySelectorAll(".hole").forEach(h=>h.innerHTML="");
+  speakWord(currentWord);
+  delayedMoleTimer=setTimeout(()=>{ if(timeLeft<=0) return; showMoles(); roundTimer=setInterval(showMoles,moleInterval); }, delayAfterTTS);
+}
+function showMoles(){ if(timeLeft<=0) return; const holes=[...document.querySelectorAll(".hole")]; holes.forEach(h=>h.innerHTML=""); const chosen=[]; while(chosen.length<simultaneousMoles && holes.length>0){const idx=Math.floor(Math.random()*holes.length); chosen.push(holes.splice(idx,1)[0]);} chosen.forEach(div=>{let word=wordPairs[Math.floor(Math.random()*wordPairs.length)]; const img=document.createElement("img"); img.src=word.img; img.dataset.en=word.en; if(word.en===currentWord.en) img.dataset.correct="true"; div.appendChild(img); setTimeout(()=>{if(img&&img.parentNode) img.remove();},moleDuration);});}
+function clickHole(id){const div=document.querySelector('[data-id="'+id+'"]');if(!div)return; const imgs=div.querySelectorAll("img"); imgs.forEach(img=>{if(img.dataset.correct==="true"){matched++; document.getElementById("matched").textContent=matched; document.getElementById("correctSound").currentTime=0; document.getElementById("correctSound").play();} else{wrong++; document.getElementById("wrong").textContent=wrong; document.getElementById("wrongSound").currentTime=0; document.getElementById("wrongSound").play();} img.remove();}); document.getElementById("score").textContent=matched-wrong;}
+function updateTimer(){timeLeft--; document.getElementById("time").textContent=timeLeft; if(timeLeft<=0) endGame();}
+function endGame(){clearInterval(timer);clearInterval(mp3Timer);clearInterval(roundTimer);clearTimeout(delayedMoleTimer);roundTimer=null;delayedMoleTimer=null;document.getElementById("bgm").pause();window.speechSynthesis.cancel();document.querySelectorAll(".hole").forEach(h=>h.innerHTML="");const finalScore=matched-wrong;document.getElementById("endPopupText").innerHTML=`玩家 (Player): ${player}<br>答對 (Correct): ${matched}<br>答錯 (Wrong): ${wrong}<br>分數 (Score): ${finalScore}<br>時間 (Time): ${totalTime-timeLeft} 秒`; document.getElementById("endPopup").style.display="flex"; saveRanking({player,matched,wrong,score:finalScore,time:totalTime-timeLeft}); showLeaderboard(); document.getElementById("playerName").value=""; document.getElementById("status").style.display="none"; document.getElementById("startScreen").style.display="block";}
+function closeEndPopup(){document.getElementById("endPopup").style.display="none";}
+function saveRanking(r){let list=JSON.parse(localStorage.getItem("rankings")||"[]"); list.push(r); list.sort((a,b)=>b.score-a.score||b.matched-a.matched||a.time-b.time); localStorage.setItem("rankings",JSON.stringify(list));}
+function showLeaderboard(){const tbody=document.getElementById("rankings"); tbody.innerHTML=""; let list=JSON.parse(localStorage.getItem("rankings")||"[]"); list.forEach(r=>{const tr=document.createElement("tr"); tr.innerHTML="<td>"+r.player+"</td><td>"+r.matched+"</td><td>"+r.wrong+"</td><td>"+r.score+"</td><td>"+r.time+"</td>"; tbody.appendChild(tr);}); document.getElementById("leaderboard").style.display="block";}
+</script></body></html>
