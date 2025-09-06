@@ -120,7 +120,8 @@
 
       <div class="controlsGame">
         <button id="btnFlip">Flip</button>
-        <button id="btnAudio">Play Audio</button>
+        <button id="btnPlayAudio">Play Audio</button>
+        <button id="btnSpeech" class="hidden">Tap to speak</button>
         <button id="btnNext">Next</button>
         <button id="btnShuffle">Shuffle</button>
         <button id="btnAutoPlay">Auto Play</button>
@@ -155,7 +156,8 @@ const frontHanziEl = document.getElementById('frontHanzi');
 const frontPinyinEl = document.getElementById('frontPinyin');
 const backMeaningEl = document.getElementById('backMeaning');
 const btnFlip = document.getElementById('btnFlip');
-const btnAudio = document.getElementById('btnAudio');
+const btnPlayAudio = document.getElementById('btnPlayAudio');
+const btnSpeech = document.getElementById('btnSpeech');
 const btnNext = document.getElementById('btnNext');
 const btnShuffle = document.getElementById('btnShuffle');
 const btnAutoPlay = document.getElementById('btnAutoPlay');
@@ -252,6 +254,34 @@ function showCard(i){
   updateProgress();
   gameStatusEl.textContent = '';
   cardInner.parentElement.focus();
+  updateButtonStates('idle');
+}
+
+/* Button State Management */
+function updateButtonStates(mode) {
+  const allButtons = [btnFlip, btnPlayAudio, btnSpeech, btnNext, btnShuffle, btnAutoPlay];
+  
+  // Always active
+  btnStop.disabled = false;
+
+  if (mode === 'idle') {
+    allButtons.forEach(btn => btn.disabled = false);
+    btnSpeech.classList.remove('disabled');
+    btnPlayAudio.classList.remove('disabled');
+  } else if (mode === 'audio') {
+    allButtons.forEach(btn => btn.disabled = true);
+    btnStop.disabled = false;
+  } else if (mode === 'speech') {
+    allButtons.forEach(btn => btn.disabled = true);
+    btnStop.disabled = false;
+    btnSpeech.disabled = false;
+  } else if (mode === 'autoplay') {
+    allButtons.forEach(btn => btn.disabled = false);
+    btnPlayAudio.disabled = true;
+    btnSpeech.disabled = true;
+    btnPlayAudio.classList.add('disabled');
+    btnSpeech.classList.add('disabled');
+  }
 }
 
 /* Flip action */
@@ -267,16 +297,27 @@ function playHanziAudio(){
   u.lang = 'zh-CN';
   speechSynthesis.cancel();
   speechSynthesis.speak(u);
+  
+  u.onend = () => {
+    updateButtonStates('idle');
+  };
+  
+  u.onerror = () => {
+    updateButtonStates('idle');
+  };
+  
+  updateButtonStates('audio');
 }
+btnPlayAudio.addEventListener('click', playHanziAudio);
 
 /* Auto play logic */
 function startAutoPlay(){
   if(autoPlayInterval) return;
   btnAutoPlay.textContent = 'Stop Auto Play';
-  btnAudio.classList.add('disabled');
   gameStatusEl.textContent = 'Auto Play Active';
-  autoPlayInterval = setInterval(showNextCard, 2500); // 2.5 seconds per card
-  showNextCard();
+  autoPlayInterval = setInterval(showNextCardAndPlayAudio, 2500);
+  showNextCardAndPlayAudio();
+  updateButtonStates('autoplay');
 }
 
 function stopAutoPlay(){
@@ -284,17 +325,14 @@ function stopAutoPlay(){
   clearInterval(autoPlayInterval);
   autoPlayInterval = null;
   btnAutoPlay.textContent = 'Auto Play';
-  btnAudio.classList.remove('disabled');
   gameStatusEl.textContent = '';
+  updateButtonStates('idle');
 }
 
-function showNextCard(){
-  if(!shuffled.length) return stopAutoPlay();
-  
+function showNextCardAndPlayAudio(){
   if(index >= shuffled.length){
     index = 0;
     shuffleArray(shuffled);
-    showCard(index);
     stopAutoPlay();
     gameStatusEl.textContent = 'End of deck. Auto-play stopped.';
     return;
@@ -308,7 +346,7 @@ btnAutoPlay.addEventListener('click', ()=>{
   if(autoPlayInterval){
     stopAutoPlay();
   } else {
-    stopRecognitionIfEnabled(); // Stop speech recognition if it was active
+    stopRecognitionIfEnabled();
     startAutoPlay();
   }
 });
@@ -342,16 +380,6 @@ btnStop.addEventListener('click', ()=>{
   stopRecognitionIfEnabled();
 });
 
-/* Main audio/speech button */
-btnAudio.addEventListener('click', ()=>{
-  if(btnAudio.classList.contains('disabled')) return;
-  if(supportsRecognition && enableSpeech){
-    startRecognitionIfEnabled();
-  } else {
-    playHanziAudio();
-  }
-});
-
 /* Speech recognition: Chrome/Chromium only */
 function initRecognitionIfAvailable(){
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -373,7 +401,7 @@ function initRecognitionIfAvailable(){
   recognition.maxAlternatives = 1;
   recognition.continuous = false;
   supportsRecognition = true;
-  btnAudio.textContent = 'Tap to speak';
+  btnSpeech.classList.remove('hidden');
 
   recognition.onresult = (ev)=>{
     stopRecognitionIfEnabled();
@@ -398,20 +426,23 @@ function initRecognitionIfAvailable(){
         gameStatusEl.style.color = 'var(--error-text)';
         setTimeout(() => {
           gameStatusEl.textContent = '';
+          updateButtonStates('idle');
         }, 2000);
       }
-    } catch(e){ console.warn(e); }
+    } catch(e){ console.warn(e); updateButtonStates('idle'); }
   };
 
   recognition.onerror = (err)=>{
     console.warn('Recognition error', err);
     gameStatusEl.textContent = 'Recognition Error.';
     gameStatusEl.style.color = 'var(--error-text)';
+    updateButtonStates('idle');
   };
 
   recognition.onend = ()=> {
     if(!isSpeaking) {
       gameStatusEl.textContent = '';
+      updateButtonStates('idle');
     }
   };
 }
@@ -423,8 +454,10 @@ function startRecognitionIfEnabled(){
     gameStatusEl.style.color = 'var(--muted)';
     isSpeaking = true;
     recognition.start();
+    updateButtonStates('speech');
   }catch(e){
     console.warn('Could not start recognition:', e);
+    updateButtonStates('idle');
   }
 }
 
@@ -433,6 +466,7 @@ function stopRecognitionIfEnabled(){
   try{ 
     isSpeaking = false;
     recognition.stop(); 
+    updateButtonStates('idle');
   }catch(e){}
 }
 
@@ -440,11 +474,16 @@ function stopRecognitionIfEnabled(){
 toggleSpeech.addEventListener('change', (e) => {
   enableSpeech = e.target.checked;
   if(enableSpeech){
+    btnSpeech.classList.remove('hidden');
     initRecognitionIfAvailable();
   } else {
     stopRecognitionIfEnabled();
-    btnAudio.textContent = 'Play Audio';
+    btnSpeech.classList.add('hidden');
   }
+});
+btnSpeech.addEventListener('click', ()=>{
+  stopAutoPlay(); // Stop auto-play if active
+  startRecognitionIfEnabled();
 });
 
 /* Start from Splash -> Review */
@@ -464,7 +503,6 @@ btnStartDirect.addEventListener('click', ()=>{
   initDeck();
   showCard(index);
   initRecognitionIfAvailable();
-  if(enableSpeech && supportsRecognition) startRecognitionIfEnabled();
 });
 
 /* Start from review */
@@ -473,7 +511,6 @@ btnStartFromReview.addEventListener('click', ()=>{
   gameScreen.classList.remove('hidden');
   window.scrollTo({top:0,left:0,behavior:'instant'});
   initRecognitionIfAvailable();
-  if(enableSpeech && supportsRecognition) startRecognitionIfEnabled();
   showCard(index);
 });
 
@@ -521,7 +558,6 @@ document.getElementById('card').addEventListener('click', ()=>{
   vocabCountEl.textContent = deck.length;
   reviewContainer.style.maxHeight = '56vh';
   renderReview();
-  if(!enableSpeech) btnAudio.textContent = 'Play Audio';
 })();
 </script>
 </body>
