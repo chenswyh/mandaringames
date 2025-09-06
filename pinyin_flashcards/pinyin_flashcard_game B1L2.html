@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Pinyin Flashcards — Play</title>
+<style>
+  /* System font stack (no network fonts) */
+  :root{
+    --bg1:#0f1220; --bg2:#1a1f35; --card:#121528; --accent:#3dd6d0; --accent-2:#ffd166;
+    --text:#e6e9f2; --muted:#a8b0c7; --glass: rgba(255,255,255,0.04);
+    --success-bg: #1f3b3a; --success-border: #3dd6d0; --success-text: #3dd6d0;
+    --error-bg: #41242e; --error-border: #f43f5e; --error-text: #f43f5e;
+  }
+  * { box-sizing:border-box; }
+  html, body{ height:100%; margin:0; font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial; background:linear-gradient(180deg,var(--bg1),var(--bg2)); color:var(--text); }
+  .wrap{ max-width:1100px; margin:18px auto; padding:18px; display:flex; flex-direction:column; gap:18px; align-items:center; }
+  .card{ width:100%; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid var(--glass); border-radius:14px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.4); }
+  h1{ margin:0 0 8px; font-size:clamp(20px,2.6vw,30px); letter-spacing:.6px; }
+  p.lead{ margin:0; color:var(--muted); }
+  .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  button{ appearance:none; border:none; border-radius:10px; padding:10px 14px; font-weight:700; cursor:pointer; background:var(--accent); color:#071016; }
+  button.disabled{ background:var(--muted); cursor:not-allowed; opacity:0.6; }
+  .muted{ color:var(--muted); font-size:13px; }
+  
+  /* Splash */
+  #splash{ display:flex; flex-direction:column; align-items:center; gap:12px; }
+  
+  /* Review */
+  #reviewScreen{ width:100%; display:flex; flex-direction:column; gap:12px; }
+  #reviewContainer{ width:100%; max-height:56vh; overflow:auto; border-radius:10px; padding:8px; background:rgba(0,0,0,0.18); border:1px solid rgba(255,255,255,0.03); }
+  #reviewList{ display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; }
+  .reviewItem{ background:var(--card); border-radius:10px; padding:10px; box-shadow:0 6px 18px rgba(0,0,0,0.4); text-align:center; }
+  .reviewHanzi{ font-size:20px; font-weight:700; margin-bottom:6px; }
+  .reviewPinyin{ color:var(--accent-2); font-size:13px; margin-bottom:6px; }
+  .reviewMean{ color:var(--muted); font-size:12px; }
+  .controls{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:8px; }
+  
+  /* Game screen */
+  #gameScreen{ width:100%; min-height:60vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; }
+  #cardWrap{ width:90%; max-width:520px; height:320px; display:flex; align-items:center; justify-content:center; }
+  #card{ width:100%; height:100%; max-height:520px; perspective:1200px; display:flex; align-items:center; justify-content:center; }
+  #cardInner{ width:100%; height:100%; position:relative; border-radius:16px; transform-style:preserve-3d; transition:transform .72s cubic-bezier(.2,.9,.2,1); }
+  .face{ position:absolute; inset:0; border-radius:16px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:18px; backface-visibility:hidden; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); box-shadow:0 18px 40px rgba(0,0,0,.45); border:3px solid rgba(61,214,208,0.08); }
+  .front { z-index:2; transform: rotateY(0deg); }
+  .back{ transform: rotateY(180deg); }
+  #cardInner.flipped{ transform: rotateY(180deg); }
+  .face::after{ content:''; position:absolute; inset:-6px; border-radius:20px; box-shadow:0 6px 28px rgba(61,214,208,0.06); pointer-events:none; }
+  .hanzi{ font-size:clamp(36px,6vw,72px); font-weight:800; line-height:1; }
+  .pinyin{ font-size:18px; color:var(--accent-2); margin-top:8px; font-weight:700; }
+  .meaning{ font-size:clamp(24px, 4.5vw, 42px); color:var(--text); padding:8px; text-align:center; }
+  .controlsGame{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-top:6px; }
+  .mutedSmall{ color:var(--muted); font-size:13px; }
+  #progress{ color:var(--muted); font-size:13px; margin-top:6px; }
+  
+  /* Small helpers */
+  .hidden{ display:none !important; }
+  .expandBtn{ background:transparent; border:1px solid rgba(255,255,255,0.04); color:var(--text); padding:8px 10px; border-radius:8px; }
+  .toast{ position:fixed; bottom:20px; left:50%; transform:translateX(-50%); padding:12px 20px; border-radius:8px; z-index:1000; font-size:14px; box-shadow:0 4px 12px rgba(0,0,0,0.3); opacity:0; transition:opacity .3s ease-in-out; }
+  .toast.show{ opacity:1; }
+  .toast.success{ background:var(--success-bg); border:1px solid var(--success-border); color:var(--success-text); }
+  .toast.error{ background:var(--error-bg); border:1px solid var(--error-border); color:var(--error-text); }
+  .toast.info{ background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.1); color:var(--text); }
+
+  @media (max-width:640px){
+    #cardWrap{ height:260px; }
+    .hanzi{ font-size:48px; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div id="splash" class="card">
+      <h1>Speak & Practice — Pinyin Flashcards</h1>
+      <p class="lead">Best in <strong>Google Chrome</strong>. Microphone required for speech recognition. If your browser doesn't support it, the app will run as an interactive flashcard deck with audio playback.</p>
+      <div class="row">
+        <button id="btnToReview">Review Vocabulary</button>
+        <button id="btnStartDirect">Start Game</button>
+      </div>
+      <p class="muted">Words: <span id="vocabCount">0</span> • Tone numbers required in Pinyin (e.g. ni3).</p>
+      <div id="settings" style="margin-top:10px">
+        <label style="color:var(--muted);font-size:14px">
+          <input type="checkbox" id="toggleSpeech" checked> Enable Speech Recognition
+        </label>
+      </div>
+    </div>
+
+    <div id="reviewScreen" class="card hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <h2 style="margin:0">Vocabulary Review</h2>
+          <div class="mutedSmall">Scroll to review. Expand to see more.</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="toggleExpand" class="expandBtn">Expand</button>
+          <button id="btnStartFromReview">Start Game</button>
+          <button id="btnBackToSplash" class="expandBtn">Back</button>
+        </div>
+      </div>
+
+      <div id="reviewContainer">
+        <div id="reviewList"></div>
+      </div>
+    </div>
+
+    <div id="gameScreen" class="card hidden">
+      <div id="cardWrap">
+        <div id="card" aria-hidden="false" role="group" tabindex="0">
+          <div id="cardInner">
+            <div class="face front">
+              <div class="hanzi" id="frontHanzi">你</div>
+              <div class="pinyin" id="frontPinyin">ni3</div>
+            </div>
+            <div class="face back">
+              <div class="meaning" id="backMeaning">you</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="controlsGame">
+        <button id="btnFlip">Flip</button>
+        <button id="btnAudio">Play Audio</button>
+        <button id="btnNext">Next</button>
+        <button id="btnShuffle">Shuffle</button>
+        <button id="btnAutoPlay">Auto Play</button>
+        <button id="btnStop">Stop</button>
+      </div>
+      <div id="progress" class="mutedSmall">0 / 0</div>
+      <div id="gameStatus" class="mutedSmall"></div>
+    </div>
+  </div>
+  <div id="toastContainer"></div>
+<script>
+/* Embedded vocab & opts */
+const VOCAB = [{"hanzi":"有","pinyin":"you3","meaning":"to have"},{"hanzi":"兩","pinyin":"liang3","meaning":"two (express quantity)"},{"hanzi":"個","pinyin":"ge","meaning":"generic measure word"},{"hanzi":"弟弟","pinyin":"di4di","meaning":"younger brother"},{"hanzi":"你","pinyin":"ni3","meaning":"you"},{"hanzi":"妳","pinyin":"ni3","meaning":"you"},{"hanzi":"嗎","pinyin":"ma","meaning":"question particle"},{"hanzi":"一","pinyin":"yi1","meaning":"one"},{"hanzi":"姊姊","pinyin":"jie3jie","meaning":"older sister"},{"hanzi":"姐姐","pinyin":"jie3jie","meaning":"older sister"},{"hanzi":"也","pinyin":"ye3","meaning":"also"},{"hanzi":"哥哥","pinyin":"ge1ge","meaning":"older brother"},{"hanzi":"沒","pinyin":"mei2","meaning":"not"},{"hanzi":"只","pinyin":"zhi3","meaning":"only"},{"hanzi":"妹妹","pinyin":"mei4mei","meaning":"younger sister"},{"hanzi":"沒有","pinyin":"mei2you3","meaning":"to not have"}];
+const OPTS = {};
+
+/* Elements */
+const vocabCountEl = document.getElementById('vocabCount');
+const btnToReview = document.getElementById('btnToReview');
+const btnStartDirect = document.getElementById('btnStartDirect');
+const reviewScreen = document.getElementById('reviewScreen');
+const reviewList = document.getElementById('reviewList');
+const reviewContainer = document.getElementById('reviewContainer');
+const toggleExpand = document.getElementById('toggleExpand');
+const btnStartFromReview = document.getElementById('btnStartFromReview');
+const btnBackToSplash = document.getElementById('btnBackToSplash');
+const splash = document.getElementById('splash');
+const toggleSpeech = document.getElementById('toggleSpeech');
+
+const gameScreen = document.getElementById('gameScreen');
+const cardInner = document.getElementById('cardInner');
+const frontHanziEl = document.getElementById('frontHanzi');
+const frontPinyinEl = document.getElementById('frontPinyin');
+const backMeaningEl = document.getElementById('backMeaning');
+const btnFlip = document.getElementById('btnFlip');
+const btnAudio = document.getElementById('btnAudio');
+const btnNext = document.getElementById('btnNext');
+const btnShuffle = document.getElementById('btnShuffle');
+const btnAutoPlay = document.getElementById('btnAutoPlay');
+const btnStop = document.getElementById('btnStop');
+const progressEl = document.getElementById('progress');
+const gameStatusEl = document.getElementById('gameStatus');
+
+let deck = Array.isArray(VOCAB) ? VOCAB.slice() : [];
+let shuffled = [];
+let index = 0;
+let isExpanded = false;
+let supportsRecognition = false;
+let isSpeaking = false;
+let recognition = null;
+let enableSpeech = OPTS.speechRecognition !== false;
+let autoPlayInterval = null;
+
+/* Notification/Toast function */
+function showToast(message, type = 'info', duration = 3000) {
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('show');
+  }, 10);
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
+/* Show count */
+vocabCountEl.textContent = deck.length;
+toggleSpeech.checked = enableSpeech;
+
+/* Populate review list */
+function renderReview(){
+  reviewList.innerHTML = '';
+  for(const w of shuffled){
+    const d = document.createElement('div');
+    d.className = 'reviewItem';
+    d.innerHTML = '<div class="reviewHanzi">'+escapeHtml(w.hanzi)+'</div><div class="reviewPinyin">'+escapeHtml(w.pinyin)+'</div><div class="reviewMean">'+escapeHtml(w.meaning || '')+'</div>';
+    reviewList.appendChild(d);
+  }
+}
+
+/* Expand/collapse review */
+toggleExpand.addEventListener('click', ()=>{
+  if(!isExpanded){
+    reviewContainer.style.maxHeight = '85vh';
+    toggleExpand.textContent = 'Collapse';
+  } else {
+    reviewContainer.style.maxHeight = '56vh';
+    toggleExpand.textContent = 'Expand';
+  }
+  isExpanded = !isExpanded;
+});
+
+/* Safe escape */
+function escapeHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+/* Shuffle utility */
+function shuffleArray(a){
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+}
+
+/* Initialize deck (shuffle) */
+function initDeck(){
+  shuffled = deck.slice();
+  shuffleArray(shuffled);
+  index = 0;
+  renderReview();
+  updateProgress();
+}
+
+/* Update progress */
+function updateProgress(){
+  progressEl.textContent = (shuffled.length ? (index+1) + ' / ' + shuffled.length : '0 / 0');
+}
+
+/* Show current card centered */
+function showCard(i){
+  if(!shuffled.length) return;
+  const w = shuffled[i];
+  frontHanziEl.textContent = w.hanzi || '';
+  frontPinyinEl.textContent = w.pinyin || '';
+  backMeaningEl.textContent = w.meaning || '';
+  cardInner.classList.remove('flipped');
+  window.scrollTo({top:0, left:0, behavior:'instant'});
+  updateProgress();
+  gameStatusEl.textContent = '';
+  cardInner.parentElement.focus();
+}
+
+/* Flip action */
+btnFlip.addEventListener('click', ()=>{
+  cardInner.classList.toggle('flipped');
+});
+
+/* Play audio for Hanzi */
+function playHanziAudio(){
+  const w = shuffled[index];
+  if(!w) return;
+  const u = new SpeechSynthesisUtterance(w.hanzi);
+  u.lang = 'zh-CN';
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+/* Auto play logic */
+function startAutoPlay(){
+  if(autoPlayInterval) return;
+  btnAutoPlay.textContent = 'Stop Auto Play';
+  btnAudio.classList.add('disabled');
+  gameStatusEl.textContent = 'Auto Play Active';
+  autoPlayInterval = setInterval(showNextCard, 2500); // 2.5 seconds per card
+  showNextCard();
+}
+
+function stopAutoPlay(){
+  if(!autoPlayInterval) return;
+  clearInterval(autoPlayInterval);
+  autoPlayInterval = null;
+  btnAutoPlay.textContent = 'Auto Play';
+  btnAudio.classList.remove('disabled');
+  gameStatusEl.textContent = '';
+}
+
+function showNextCard(){
+  if(!shuffled.length) return stopAutoPlay();
+  
+  if(index >= shuffled.length){
+    index = 0;
+    shuffleArray(shuffled);
+    showCard(index);
+    stopAutoPlay();
+    gameStatusEl.textContent = 'End of deck. Auto-play stopped.';
+    return;
+  }
+  showCard(index);
+  playHanziAudio();
+  index++;
+}
+
+btnAutoPlay.addEventListener('click', ()=>{
+  if(autoPlayInterval){
+    stopAutoPlay();
+  } else {
+    stopRecognitionIfEnabled(); // Stop speech recognition if it was active
+    startAutoPlay();
+  }
+});
+
+/* Next action */
+btnNext.addEventListener('click', ()=>{
+  if(!shuffled.length) return;
+  stopAutoPlay();
+  index++;
+  if(index >= shuffled.length){
+    index = 0;
+    shuffleArray(shuffled);
+  }
+  showCard(index);
+});
+
+/* Shuffle deck button */
+btnShuffle.addEventListener('click', ()=>{
+  stopAutoPlay();
+  shuffleArray(shuffled);
+  index = 0;
+  renderReview();
+  showCard(index);
+});
+
+/* Stop (return to splash) */
+btnStop.addEventListener('click', ()=>{
+  stopAutoPlay();
+  gameScreen.classList.add('hidden');
+  splash.classList.remove('hidden');
+  stopRecognitionIfEnabled();
+});
+
+/* Main audio/speech button */
+btnAudio.addEventListener('click', ()=>{
+  if(btnAudio.classList.contains('disabled')) return;
+  if(supportsRecognition && enableSpeech){
+    startRecognitionIfEnabled();
+  } else {
+    playHanziAudio();
+  }
+});
+
+/* Speech recognition: Chrome/Chromium only */
+function initRecognitionIfAvailable(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){
+    console.warn('SpeechRecognition not supported in this browser.');
+    supportsRecognition = false;
+    return;
+  }
+  
+  if (location.protocol === 'file:') {
+    showToast('Chrome blocks speech recognition on local files. Use a local server.', 'error', 5000);
+    supportsRecognition = false;
+    return;
+  }
+
+  recognition = new SR();
+  recognition.lang = 'zh-CN';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  recognition.continuous = false;
+  supportsRecognition = true;
+  btnAudio.textContent = 'Tap to speak';
+
+  recognition.onresult = (ev)=>{
+    stopRecognitionIfEnabled();
+    try{
+      const transcript = String(ev.results[0][0].transcript || '').trim();
+      const spoken = transcript.replace(/[\s，。？！,\.]/g,'').toLowerCase();
+      const expected = (shuffled[index].hanzi || '').replace(/\s/g,'').toLowerCase();
+      if(!expected) return;
+
+      if(spoken.indexOf(expected) !== -1 || expected.indexOf(spoken) !== -1 || spoken === expected){
+        cardInner.classList.add('flipped');
+        gameStatusEl.textContent = 'Correct!';
+        gameStatusEl.style.color = 'var(--success-text)';
+        setTimeout(()=> {
+          index++;
+          if(index >= shuffled.length){ index = 0; shuffleArray(shuffled); }
+          showCard(index);
+          startRecognitionIfEnabled();
+        }, 700);
+      } else {
+        gameStatusEl.textContent = 'Try again.';
+        gameStatusEl.style.color = 'var(--error-text)';
+        setTimeout(() => {
+          gameStatusEl.textContent = '';
+        }, 2000);
+      }
+    } catch(e){ console.warn(e); }
+  };
+
+  recognition.onerror = (err)=>{
+    console.warn('Recognition error', err);
+    gameStatusEl.textContent = 'Recognition Error.';
+    gameStatusEl.style.color = 'var(--error-text)';
+  };
+
+  recognition.onend = ()=> {
+    if(!isSpeaking) {
+      gameStatusEl.textContent = '';
+    }
+  };
+}
+
+function startRecognitionIfEnabled(){
+  if(!supportsRecognition || !recognition || !enableSpeech) return;
+  try{
+    gameStatusEl.textContent = 'Listening...';
+    gameStatusEl.style.color = 'var(--muted)';
+    isSpeaking = true;
+    recognition.start();
+  }catch(e){
+    console.warn('Could not start recognition:', e);
+  }
+}
+
+function stopRecognitionIfEnabled(){
+  if(!supportsRecognition || !recognition) return;
+  try{ 
+    isSpeaking = false;
+    recognition.stop(); 
+  }catch(e){}
+}
+
+/* User toggles speech recognition */
+toggleSpeech.addEventListener('change', (e) => {
+  enableSpeech = e.target.checked;
+  if(enableSpeech){
+    initRecognitionIfAvailable();
+  } else {
+    stopRecognitionIfEnabled();
+    btnAudio.textContent = 'Play Audio';
+  }
+});
+
+/* Start from Splash -> Review */
+btnToReview.addEventListener('click', ()=>{
+  splash.classList.add('hidden');
+  reviewScreen.classList.remove('hidden');
+  initDeck();
+  renderReview();
+  reviewContainer.scrollTop = 0;
+});
+
+/* Start directly (skip review) */
+btnStartDirect.addEventListener('click', ()=>{
+  splash.classList.add('hidden');
+  reviewScreen.classList.add('hidden');
+  gameScreen.classList.remove('hidden');
+  initDeck();
+  showCard(index);
+  initRecognitionIfAvailable();
+  if(enableSpeech && supportsRecognition) startRecognitionIfEnabled();
+});
+
+/* Start from review */
+btnStartFromReview.addEventListener('click', ()=>{
+  reviewScreen.classList.add('hidden');
+  gameScreen.classList.remove('hidden');
+  window.scrollTo({top:0,left:0,behavior:'instant'});
+  initRecognitionIfAvailable();
+  if(enableSpeech && supportsRecognition) startRecognitionIfEnabled();
+  showCard(index);
+});
+
+/* Back to splash */
+btnBackToSplash.addEventListener('click', ()=>{
+  gameScreen.classList.add('hidden');
+  reviewScreen.classList.add('hidden');
+  splash.classList.remove('hidden');
+  stopAutoPlay();
+  stopRecognitionIfEnabled();
+});
+
+/* Keyboard support: left/right to navigate, space to flip */
+window.addEventListener('keydown', (e)=>{
+  if(gameScreen.classList.contains('hidden')) return;
+  if(e.key === 'ArrowRight') { 
+    stopAutoPlay();
+    btnNext.click(); 
+  }
+  else if(e.key === 'ArrowLeft') { 
+    stopAutoPlay();
+    index = Math.max(0, index-1); showCard(index); 
+  }
+  else if(e.key === ' ' || e.key === 'Spacebar') { e.preventDefault(); btnFlip.click(); }
+});
+
+/* Tap to flip on mobile */
+document.getElementById('card').addEventListener('click', ()=>{
+  stopAutoPlay();
+  btnFlip.click();
+});
+
+/* Initialize and show counts */
+(function init(){
+  if(!Array.isArray(deck) || deck.length === 0){
+    deck = [
+      {hanzi:'你', pinyin:'ni3', meaning:'you'},
+      {hanzi:'好', pinyin:'hao3', meaning:'good'},
+      {hanzi:'学', pinyin:'xue2', meaning:'learn'},
+      {hanzi:'我', pinyin:'wo3', meaning:'I, me'}
+    ];
+  }
+  shuffled = deck.slice();
+  shuffleArray(shuffled);
+  vocabCountEl.textContent = deck.length;
+  reviewContainer.style.maxHeight = '56vh';
+  renderReview();
+  if(!enableSpeech) btnAudio.textContent = 'Play Audio';
+})();
+</script>
+</body>
+</html>
