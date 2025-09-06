@@ -22,7 +22,7 @@ body{font-family:Arial;text-align:center;background:#f0f8ff;background-image:url
 <audio id="wrongSound" src="audio/default_wrong.mp3"></audio>
 <div id="endPopup"><div id="endPopupContent"><h2>🎉 遊戲結束 (Game Over)</h2><div id="endPopupText"></div><button onclick="closeEndPopup()">確定 / OK</button></div></div>
 <script>
-const wordPairs=[{"zh":"您好","en":"Hello","img":"images/mole1.png"},{"zh":"我姓王","en":"My last name is Wang","img":"images/mole2.png"},{"zh":"您貴姓","en":"What's your last name?","img":"images/mole3.png"},{"zh":"我是美國人","en":"I am American","img":"images/mole4.png"},{"zh":"我是台灣人","en":"I am Taiwanese","img":"images/mole5.png"},{"zh":"您叫什麼名字","en":"What's your name","img":"images/mole6.png"}];
+const wordPairs=[{"zh":"您好","en":"Hello","img":"images/mole1.png"},{"zh":"我姓王","en":"My last name is Wang","img":"images/mole2.png"},{"zh":"您貴姓","en":"What's your last name?","img":"images/mole3.png"},{"zh":"我是美國人","en":"I am American","img":"images/mole4.png"},{"zh":"他叫什麼名字","en":"What's his name","img":"images/mole5.png"},{"zh":"您叫什麼名字","en":"What's your name","img":"images/mole6.png"}];
 let gridSize=3,simultaneousMoles=6,totalTime=90,mp3Interval=12,ttsRate=0.8,moleDuration=8000,moleInterval=8000,delayAfterTTS=1000;
 let matched=0,wrong=0,timeLeft=totalTime,timer=null,mp3Timer=null,roundTimer=null,delayedMoleTimer=null,currentWord=null,lastWord=null,player="";
 const ttsLang="zh-TW";
