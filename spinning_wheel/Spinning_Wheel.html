@@ -30,7 +30,7 @@ button { margin:5px; padding:10px 20px; cursor:pointer; }
 <body>
 
 <div id="generator" class="screen active">
-<h1>Phrase Generator</h1>
+<h1>Spinning Wheel Generator</h1>
 <textarea id="phraseInput" placeholder="Enter phrase pairs here..."></textarea>
 <button onclick="parsePhrases()">Add Phrases</button>
 <button onclick="showHelp()">Help</button>
@@ -221,31 +221,54 @@ function drawWheel() {
 
 // Spin logic
 function spinWheel() {
-  if(spinning || phrases.length===0) return;
+  if (spinning || phrases.length === 0) return;
   spinning = true;
-  targetIndex = Math.floor(Math.random()*phrases.length);
-  const sliceAngle = 2*Math.PI/phrases.length;
-  const fullSpins = 5;
-  const targetRotation = -Math.PI/2 - (targetIndex+0.5)*sliceAngle;
-  const finalRotation = fullSpins*2*Math.PI + targetRotation - rotation;
-  const duration = 3000;
+
+  // Pick target slice fairly
+  targetIndex = Math.floor(Math.random() * phrases.length);
+  const sliceAngle = 2 * Math.PI / phrases.length;
+
+  // Human-like spin settings
+  const minFullSpins = 5; // longer spins
+  const maxFullSpins = 10;
+  const fullSpins = minFullSpins + Math.floor(Math.random() * (maxFullSpins - minFullSpins + 1));
+
+  const minDuration = 3500; // longer spin time
+  const maxDuration = 6000;
+  const duration = minDuration + Math.random() * (maxDuration - minDuration);
+
+  const targetRotation = -Math.PI / 2 - (targetIndex + 0.5) * sliceAngle;
+  const finalRotation = fullSpins * 2 * Math.PI + targetRotation - rotation;
   const start = performance.now();
   const startRotation = rotation;
 
-  function animateSpin(now){
-    const t = Math.min(1,(now-start)/duration);
-    const ease = 1 - Math.pow(1-t,3);
-    rotation = startRotation + ease*finalRotation;
+  // Easing function to simulate acceleration then deceleration
+  function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+  }
+  function easeInOut(t) {
+    return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2;
+  }
+
+  function animateSpin(now) {
+    const t = Math.min(1, (now - start) / duration);
+
+    // Mix acceleration then deceleration for natural feel
+    const eased = easeInOut(t);
+    rotation = startRotation + eased * finalRotation;
+
     drawWheel();
-    if(t<1){
+
+    if (t < 1) {
       requestAnimationFrame(animateSpin);
     } else {
-      rotation = (rotation)%(2*Math.PI);
+      rotation = rotation % (2 * Math.PI);
       drawWheel();
       showResult();
-      spinning=false;
+      spinning = false;
     }
   }
+
   requestAnimationFrame(animateSpin);
 }
 
