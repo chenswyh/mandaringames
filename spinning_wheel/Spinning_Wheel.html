@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Spinning Wheel Game</title>
+<style>
+body { margin:0; font-family:Arial,sans-serif; background:#222; color:white; overflow:hidden; }
+.screen { display:none; width:100vw; height:100vh; padding:20px; box-sizing:border-box; overflow:auto; }
+.active { display:block; }
+textarea { width:100%; height:100px; }
+table { width:100%; border-collapse: collapse; margin-top:10px; }
+table, th, td { border:1px solid #555; }
+th, td { padding:5px; text-align:left; }
+.controls { margin-top:10px; }
+label { display:block; margin:5px 0; }
+.wheel-container { display:flex; justify-content:center; align-items:center; height:90%; position:relative; }
+canvas { background:#fff; border-radius:50%; display:block; margin:auto; }
+.game-controls { position:absolute; right:10px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; }
+button { margin:5px; padding:10px 20px; cursor:pointer; }
+.pointer { position:absolute; top:0; left:50%; transform:translateX(-50%) rotate(180deg); width:0; height:0; border-left:20px solid transparent; border-right:20px solid transparent; border-bottom:30px solid red; z-index:10; }
+.modal { display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; overflow:auto; background-color:rgba(0,0,0,0.7); }
+.modal-content h2 { text-align:center; }
+.modal-content { background-color:#333; margin:20% auto; padding:20px; border:1px solid #888; width:350px; border-radius:10px; color:white; font-size:18px; }
+.modal-content.center { text-align:center; }
+.modal-content.left { text-align:left; }
+.modal-content button { margin-top:15px; padding:10px 20px; cursor:pointer; border:none; border-radius:5px; background:#4CAF50; color:white; }
+
+</style>
+</head>
+<body>
+
+<div id="generator" class="screen active">
+<h1>Phrase Generator</h1>
+<textarea id="phraseInput" placeholder="Enter phrase pairs here..."></textarea>
+<button onclick="parsePhrases()">Add Phrases</button>
+<button onclick="showHelp()">Help</button>
+<table id="phraseTable">
+<thead><tr><th>Chinese</th><th>English</th><th>Actions</th></tr></thead>
+<tbody></tbody>
+</table>
+<div class="controls">
+<button onclick="savePhraseBank()">Save to Bank</button>
+<button onclick="loadPhraseBank()">Load from Bank</button>
+<button onclick="exportPhrases()">Export</button>
+<button onclick="clearPhrases()">Clear</button>
+</div>
+
+<h2>Custom Sound Effects</h2>
+<label>Spinning Sound: <input type="text" id="spinSoundPath" placeholder="audio/spin.mp3"></label>
+<label>Stop Sound: <input type="text" id="stopSoundPath" placeholder="audio/stop.mp3"></label>
+<button onclick="applySoundPaths()">Apply Sounds</button>
+
+<button onclick="goToGame()">Go to Game</button>
+</div>
+
+<div id="game" class="screen">
+<div class="wheel-container">
+<div class="pointer"></div>
+<canvas id="wheelCanvas"></canvas>
+<div class="game-controls">
+<button onclick="spinWheel()">Spin</button>
+<button onclick="toggleLanguage()">Toggle Display</button>
+<button onclick="goToGenerator()">Back to Generator</button>
+<button onclick="playAudio()">Play Audio</button>
+</div>
+</div>
+</div>
+
+<div id="resultModal" class="modal">
+<div class="modal-content center">
+<div id="modalText"></div>
+<button onclick="closeModal()">OK</button>
+</div>
+</div>
+
+<div id="helpModal" class="modal">
+<div class="modal-content">
+<h2>How to Use</h2>
+<ul style="list-style:disc; padding-left:20px;">
+<li>Enter phrase pairs (Chinese, English) separated by comma or tab.</li>
+<li>Press "Add Phrases" to add them to the table.</li>
+<li>Use Save/Load/Export/Clear to manage phrase banks.</li>
+<li>Go to Game to spin the wheel. Toggle language and play audio.</li>
+<li>Click the pointer to see which phrase you landed on.</li>
+</ul>
+<button onclick="closeHelp()">Close</button>
+</div>
+</div>
+
+<script>
+let phrases = [];
+let displayLang = 'ch';
+let spinningSound = null;
+let stopSound = null;
+let spinning = false;
+let targetIndex = 0;
+let rotation = 0;
+let sliceColors = [];
+
+// Canvas setup
+const canvas = document.getElementById('wheelCanvas');
+const ctx = canvas.getContext('2d');
+const pointer = document.querySelector('.pointer');
+
+function resizeCanvas() {
+  const size = Math.min(window.innerWidth*0.85, window.innerHeight*0.85);
+  canvas.width = size; canvas.height = size;
+  drawWheel();
+}
+window.addEventListener('resize', resizeCanvas);
+
+// Generator functions
+function parsePhrases() {
+  const lines = document.getElementById('phraseInput').value.trim().split('\n');
+  lines.forEach(line => {
+    if(!line) return;
+    let parts = line.split(/,|\t/);
+    phrases.push(parts.length==2?{ch:parts[0].trim(), en:parts[1].trim()}:{ch:line.trim(), en:''});
+  });
+  renderTable();
+  generateSliceColors();
+}
+function renderTable() {
+  const tbody = document.querySelector('#phraseTable tbody');
+  tbody.innerHTML='';
+  phrases.forEach((p,i)=>{
+    const row=document.createElement('tr');
+    row.innerHTML=`<td>${p.ch}</td><td>${p.en}</td><td><button onclick="editPhrase(${i}, this)">Edit</button><button onclick="deletePhrase(${i})">Delete</button></td>`;
+    tbody.appendChild(row);
+  });
+}
+function editPhrase(i, btn) {
+  const tr = btn.parentElement.parentElement;
+  const tdCh = tr.children[0], tdEn = tr.children[1];
+  if(btn.textContent==='Edit'){
+    tdCh.innerHTML=`<input type='text' value='${phrases[i].ch}'>`;
+    tdEn.innerHTML=`<input type='text' value='${phrases[i].en}'>`;
+    btn.textContent='Save';
+  } else {
+    phrases[i].ch = tdCh.querySelector('input').value;
+    phrases[i].en = tdEn.querySelector('input').value;
+    renderTable();
+  }
+}
+function deletePhrase(i){ phrases.splice(i,1); renderTable(); generateSliceColors(); }
+function clearPhrases(){ phrases=[]; renderTable(); generateSliceColors(); }
+function savePhraseBank(){ localStorage.setItem('phraseBank', JSON.stringify(phrases)); }
+function loadPhraseBank(){ phrases=JSON.parse(localStorage.getItem('phraseBank')||'[]'); renderTable(); generateSliceColors(); }
+function exportPhrases(){ const text = phrases.map(p=>`${p.ch}\t${p.en}`).join('\n'); const blob = new Blob([text],{type:'text/plain'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download='phrases.txt'; a.click(); }
+
+function goToGame(){ document.getElementById('generator').classList.remove('active'); document.getElementById('game').classList.add('active'); resizeCanvas(); }
+function goToGenerator(){ document.getElementById('game').classList.remove('active'); document.getElementById('generator').classList.add('active'); }
+function toggleLanguage(){ displayLang = displayLang==='ch'?'en':'ch'; drawWheel(); }
+
+// Wheel drawing
+function generateSliceColors() {
+  sliceColors = [];
+  for(let i=0;i<phrases.length;i++){
+    let color;
+    do {
+      color = `hsl(${Math.floor(Math.random()*360)},70%,50%)`;
+    } while(sliceColors[i-1] && sliceColors[i-1]===color);
+    sliceColors.push(color);
+  }
+}
+
+function getTextColor(bgColor) {
+  const hsl = bgColor.match(/\d+/g);
+  const l = parseInt(hsl[2]);
+  return l>60 ? "#000" : "#fff";
+}
+
+function drawWheel() {
+  if(phrases.length===0) return;
+  const centerX = canvas.width/2;
+  const centerY = canvas.height/2;
+  const radius = Math.min(centerX, centerY)-20;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const sliceAngle = 2*Math.PI/phrases.length;
+  for(let i=0;i<phrases.length;i++){
+    const start = i*sliceAngle + rotation;
+    const end = start + sliceAngle;
+    ctx.beginPath();
+    ctx.moveTo(centerX,centerY);
+    ctx.arc(centerX,centerY,radius,start,end);
+    ctx.closePath();
+    ctx.fillStyle = sliceColors[i];
+    ctx.fill();
+    ctx.strokeStyle = "#222";
+    ctx.stroke();
+
+    // Draw text dynamically with multi-line if needed
+    ctx.save();
+    ctx.translate(centerX,centerY);
+    ctx.rotate(start + sliceAngle/2);
+    ctx.textAlign="right";
+    ctx.textBaseline="middle";
+    let text = displayLang==='ch'?phrases[i].ch:phrases[i].en;
+    let fontSize = radius*0.15;
+    ctx.font="bold "+fontSize+"px Arial";
+    ctx.fillStyle=getTextColor(sliceColors[i]);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "#000";
+
+    // Split text if too wide
+    let metrics = ctx.measureText(text);
+    if(metrics.width>radius*1.2){
+      let mid = Math.floor(text.length/2);
+      let first=text.substring(0,mid), second=text.substring(mid);
+      ctx.strokeText(first, radius-10, -fontSize*0.3);
+      ctx.fillText(first, radius-10, -fontSize*0.3);
+      ctx.strokeText(second, radius-10, fontSize*0.8);
+      ctx.fillText(second, radius-10, fontSize*0.8);
+    } else {
+      ctx.strokeText(text, radius-10, 0);
+      ctx.fillText(text, radius-10, 0);
+    }
+    ctx.restore();
+  }
+}
+
+// Spin logic
+function spinWheel() {
+  if(spinning || phrases.length===0) return;
+  spinning = true;
+  targetIndex = Math.floor(Math.random()*phrases.length);
+  const sliceAngle = 2*Math.PI/phrases.length;
+  const fullSpins = 5;
+  const targetRotation = -Math.PI/2 - (targetIndex+0.5)*sliceAngle;
+  const finalRotation = fullSpins*2*Math.PI + targetRotation - rotation;
+  const duration = 3000;
+  const start = performance.now();
+  const startRotation = rotation;
+
+  function animateSpin(now){
+    const t = Math.min(1,(now-start)/duration);
+    const ease = 1 - Math.pow(1-t,3);
+    rotation = startRotation + ease*finalRotation;
+    drawWheel();
+    if(t<1){
+      requestAnimationFrame(animateSpin);
+    } else {
+      rotation = (rotation)%(2*Math.PI);
+      drawWheel();
+      showResult();
+      spinning=false;
+    }
+  }
+  requestAnimationFrame(animateSpin);
+}
+
+function showResult() {
+  const phrase = phrases[targetIndex];
+  document.getElementById('modalText').textContent = displayLang==='ch'?phrase.ch:phrase.en;
+  document.getElementById('resultModal').style.display='block';
+}
+
+function closeModal(){ document.getElementById('resultModal').style.display='none'; }
+
+function applySoundPaths(){
+  const spinPath = document.getElementById('spinSoundPath').value.trim();
+  const stopPath = document.getElementById('stopSoundPath').value.trim();
+  if(spinPath) spinningSound = new Audio(spinPath);
+  if(stopPath) stopSound = new Audio(stopPath);
+}
+
+// Play audio of current slice
+function playAudio(){
+  if(phrases.length===0) return;
+  const phrase = phrases[targetIndex];
+  const utter = new SpeechSynthesisUtterance(displayLang==='ch'?phrase.ch:phrase.en);
+  utter.lang = displayLang==='ch'?'zh-CN':'en-US';
+  speechSynthesis.speak(utter);
+}
+
+// Help modal
+function showHelp(){ document.getElementById('helpModal').style.display='block'; }
+function closeHelp(){ document.getElementById('helpModal').style.display='none'; }
+
+// Initialize
+generateSliceColors();
+resizeCanvas();
+</script>
+</body>
+</html>
