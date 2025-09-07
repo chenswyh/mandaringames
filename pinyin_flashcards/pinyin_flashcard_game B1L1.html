@@ -71,18 +71,13 @@
 <body>
   <div class="wrap">
     <div id="splash" class="card">
-      <h1>Speak & Practice — Pinyin Flashcards</h1>
-      <p class="lead">Best in <strong>Google Chrome</strong>. Microphone required for speech recognition. If your browser doesn't support it, the app will run as an interactive flashcard deck with audio playback.</p>
+      <h1>Pinyin Flashcards</h1>
+      <p class="lead">This is a simple flashcard application for practicing Chinese vocabulary. Use the controls to navigate, or turn on auto-play for a hands-free review.</p>
       <div class="row">
         <button id="btnToReview">Review Vocabulary</button>
-        <button id="btnStartDirect">Start Game</button>
+        <button id="btnStartDirect">Start</button>
       </div>
-      <p class="muted">Words: <span id="vocabCount">0</span> • Tone numbers required in Pinyin (e.g. ni3).</p>
-      <div id="settings" style="margin-top:10px">
-        <label style="color:var(--muted);font-size:14px">
-          <input type="checkbox" id="toggleSpeech" checked> Enable Speech Recognition
-        </label>
-      </div>
+      <p class="muted">Words: <span id="vocabCount">0</span></p>
     </div>
 
     <div id="reviewScreen" class="card hidden">
@@ -93,7 +88,7 @@
         </div>
         <div style="display:flex;gap:8px;align-items:center">
           <button id="toggleExpand" class="expandBtn">Expand</button>
-          <button id="btnStartFromReview">Start Game</button>
+          <button id="btnStartFromReview">Start</button>
           <button id="btnBackToSplash" class="expandBtn">Back</button>
         </div>
       </div>
@@ -121,7 +116,6 @@
       <div class="controlsGame">
         <button id="btnFlip">Flip</button>
         <button id="btnPlayAudio">Play Audio</button>
-        <button id="btnSpeech" class="hidden">Tap to speak</button>
         <button id="btnNext">Next</button>
         <button id="btnShuffle">Shuffle</button>
         <button id="btnAutoPlay">Auto Play</button>
@@ -148,7 +142,6 @@ const toggleExpand = document.getElementById('toggleExpand');
 const btnStartFromReview = document.getElementById('btnStartFromReview');
 const btnBackToSplash = document.getElementById('btnBackToSplash');
 const splash = document.getElementById('splash');
-const toggleSpeech = document.getElementById('toggleSpeech');
 
 const gameScreen = document.getElementById('gameScreen');
 const cardInner = document.getElementById('cardInner');
@@ -157,7 +150,6 @@ const frontPinyinEl = document.getElementById('frontPinyin');
 const backMeaningEl = document.getElementById('backMeaning');
 const btnFlip = document.getElementById('btnFlip');
 const btnPlayAudio = document.getElementById('btnPlayAudio');
-const btnSpeech = document.getElementById('btnSpeech');
 const btnNext = document.getElementById('btnNext');
 const btnShuffle = document.getElementById('btnShuffle');
 const btnAutoPlay = document.getElementById('btnAutoPlay');
@@ -169,10 +161,6 @@ let deck = Array.isArray(VOCAB) ? VOCAB.slice() : [];
 let shuffled = [];
 let index = 0;
 let isExpanded = false;
-let supportsRecognition = false;
-let isSpeaking = false;
-let recognition = null;
-let enableSpeech = OPTS.speechRecognition !== false;
 let autoPlayInterval = null;
 
 /* Notification/Toast function */
@@ -192,7 +180,6 @@ function showToast(message, type = 'info', duration = 3000) {
 
 /* Show count */
 vocabCountEl.textContent = deck.length;
-toggleSpeech.checked = enableSpeech;
 
 /* Populate review list */
 function renderReview(){
@@ -254,34 +241,6 @@ function showCard(i){
   updateProgress();
   gameStatusEl.textContent = '';
   cardInner.parentElement.focus();
-  updateButtonStates('idle');
-}
-
-/* Button State Management */
-function updateButtonStates(mode) {
-  const allButtons = [btnFlip, btnPlayAudio, btnSpeech, btnNext, btnShuffle, btnAutoPlay];
-  
-  // Always active
-  btnStop.disabled = false;
-
-  if (mode === 'idle') {
-    allButtons.forEach(btn => btn.disabled = false);
-    btnSpeech.classList.remove('disabled');
-    btnPlayAudio.classList.remove('disabled');
-  } else if (mode === 'audio') {
-    allButtons.forEach(btn => btn.disabled = true);
-    btnStop.disabled = false;
-  } else if (mode === 'speech') {
-    allButtons.forEach(btn => btn.disabled = true);
-    btnStop.disabled = false;
-    btnSpeech.disabled = false;
-  } else if (mode === 'autoplay') {
-    allButtons.forEach(btn => btn.disabled = false);
-    btnPlayAudio.disabled = true;
-    btnSpeech.disabled = true;
-    btnPlayAudio.classList.add('disabled');
-    btnSpeech.classList.add('disabled');
-  }
 }
 
 /* Flip action */
@@ -297,16 +256,6 @@ function playHanziAudio(){
   u.lang = 'zh-CN';
   speechSynthesis.cancel();
   speechSynthesis.speak(u);
-  
-  u.onend = () => {
-    updateButtonStates('idle');
-  };
-  
-  u.onerror = () => {
-    updateButtonStates('idle');
-  };
-  
-  updateButtonStates('audio');
 }
 btnPlayAudio.addEventListener('click', playHanziAudio);
 
@@ -317,7 +266,6 @@ function startAutoPlay(){
   gameStatusEl.textContent = 'Auto Play Active';
   autoPlayInterval = setInterval(showNextCardAndPlayAudio, 2500);
   showNextCardAndPlayAudio();
-  updateButtonStates('autoplay');
 }
 
 function stopAutoPlay(){
@@ -326,7 +274,6 @@ function stopAutoPlay(){
   autoPlayInterval = null;
   btnAutoPlay.textContent = 'Auto Play';
   gameStatusEl.textContent = '';
-  updateButtonStates('idle');
 }
 
 function showNextCardAndPlayAudio(){
@@ -346,7 +293,6 @@ btnAutoPlay.addEventListener('click', ()=>{
   if(autoPlayInterval){
     stopAutoPlay();
   } else {
-    stopRecognitionIfEnabled();
     startAutoPlay();
   }
 });
@@ -376,114 +322,8 @@ btnShuffle.addEventListener('click', ()=>{
 btnStop.addEventListener('click', ()=>{
   stopAutoPlay();
   gameScreen.classList.add('hidden');
+  reviewScreen.classList.add('hidden');
   splash.classList.remove('hidden');
-  stopRecognitionIfEnabled();
-});
-
-/* Speech recognition: Chrome/Chromium only */
-function initRecognitionIfAvailable(){
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!SR){
-    console.warn('SpeechRecognition not supported in this browser.');
-    supportsRecognition = false;
-    return;
-  }
-  
-  if (location.protocol === 'file:') {
-    showToast('Chrome blocks speech recognition on local files. Use a local server.', 'error', 5000);
-    supportsRecognition = false;
-    return;
-  }
-
-  recognition = new SR();
-  recognition.lang = 'zh-CN';
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
-  recognition.continuous = false;
-  supportsRecognition = true;
-  btnSpeech.classList.remove('hidden');
-
-  recognition.onresult = (ev)=>{
-    stopRecognitionIfEnabled();
-    try{
-      const transcript = String(ev.results[0][0].transcript || '').trim();
-      const spoken = transcript.replace(/[\s，。？！,\.]/g,'').toLowerCase();
-      const expected = (shuffled[index].hanzi || '').replace(/\s/g,'').toLowerCase();
-      if(!expected) return;
-
-      if(spoken.indexOf(expected) !== -1 || expected.indexOf(spoken) !== -1 || spoken === expected){
-        cardInner.classList.add('flipped');
-        gameStatusEl.textContent = 'Correct!';
-        gameStatusEl.style.color = 'var(--success-text)';
-        setTimeout(()=> {
-          index++;
-          if(index >= shuffled.length){ index = 0; shuffleArray(shuffled); }
-          showCard(index);
-          startRecognitionIfEnabled();
-        }, 700);
-      } else {
-        gameStatusEl.textContent = 'Try again.';
-        gameStatusEl.style.color = 'var(--error-text)';
-        setTimeout(() => {
-          gameStatusEl.textContent = '';
-          updateButtonStates('idle');
-        }, 2000);
-      }
-    } catch(e){ console.warn(e); updateButtonStates('idle'); }
-  };
-
-  recognition.onerror = (err)=>{
-    console.warn('Recognition error', err);
-    gameStatusEl.textContent = 'Recognition Error.';
-    gameStatusEl.style.color = 'var(--error-text)';
-    updateButtonStates('idle');
-  };
-
-  recognition.onend = ()=> {
-    if(!isSpeaking) {
-      gameStatusEl.textContent = '';
-      updateButtonStates('idle');
-    }
-  };
-}
-
-function startRecognitionIfEnabled(){
-  if(!supportsRecognition || !recognition || !enableSpeech) return;
-  try{
-    gameStatusEl.textContent = 'Listening...';
-    gameStatusEl.style.color = 'var(--muted)';
-    isSpeaking = true;
-    recognition.start();
-    updateButtonStates('speech');
-  }catch(e){
-    console.warn('Could not start recognition:', e);
-    updateButtonStates('idle');
-  }
-}
-
-function stopRecognitionIfEnabled(){
-  if(!supportsRecognition || !recognition) return;
-  try{ 
-    isSpeaking = false;
-    recognition.stop(); 
-    updateButtonStates('idle');
-  }catch(e){}
-}
-
-/* User toggles speech recognition */
-toggleSpeech.addEventListener('change', (e) => {
-  enableSpeech = e.target.checked;
-  if(enableSpeech){
-    btnSpeech.classList.remove('hidden');
-    initRecognitionIfAvailable();
-  } else {
-    stopRecognitionIfEnabled();
-    btnSpeech.classList.add('hidden');
-  }
-});
-btnSpeech.addEventListener('click', ()=>{
-  stopAutoPlay(); // Stop auto-play if active
-  startRecognitionIfEnabled();
 });
 
 /* Start from Splash -> Review */
@@ -502,7 +342,6 @@ btnStartDirect.addEventListener('click', ()=>{
   gameScreen.classList.remove('hidden');
   initDeck();
   showCard(index);
-  initRecognitionIfAvailable();
 });
 
 /* Start from review */
@@ -510,7 +349,6 @@ btnStartFromReview.addEventListener('click', ()=>{
   reviewScreen.classList.add('hidden');
   gameScreen.classList.remove('hidden');
   window.scrollTo({top:0,left:0,behavior:'instant'});
-  initRecognitionIfAvailable();
   showCard(index);
 });
 
@@ -520,7 +358,6 @@ btnBackToSplash.addEventListener('click', ()=>{
   reviewScreen.classList.add('hidden');
   splash.classList.remove('hidden');
   stopAutoPlay();
-  stopRecognitionIfEnabled();
 });
 
 /* Keyboard support: left/right to navigate, space to flip */
