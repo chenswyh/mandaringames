@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Zhuyin Flashcards</title>
+<style>
+:root {
+  --bg1:#0f1220; --bg2:#1a1f35; --card:#121528; --accent:#3dd6d0; --accent-2:#ffd166;
+  --text:#e6e9f2; --muted:#a8b0c7; --radius:16px; --danger:#ff5c7a; --ok:#4ade80;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+html, body { height:100%; font-family:Inter,system-ui,sans-serif; color:var(--text); background: linear-gradient(180deg,var(--bg1),var(--bg2)); }
+body { display:flex; flex-direction:column; align-items:center; justify-content:center; }
+
+button {
+  appearance:none; border:none; border-radius:14px; cursor:pointer; font-weight:700; padding:14px 20px; font-size:1.2rem;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)); color:#071016; transition:0.2s; box-shadow:0 6px 20px rgba(0,0,0,0.4);
+}
+button:hover { transform:translateY(-2px); box-shadow:0 8px 26px rgba(0,0,0,0.5); }
+button.secondary { background:#20263f; color:var(--text); border:1px solid rgba(255,255,255,.08); }
+button.warn { background:var(--danger); color:#fff; }
+button.ok { background:var(--ok); color:#06110b; }
+
+.card { background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01)); border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:24px; margin:12px; box-shadow:0 10px 30px rgba(0,0,0,.4); display:flex; flex-direction:column; align-items:center; }
+
+.hidden { display:none !important; }
+#splashScreen, #groupSelectionScreen, #reviewScreen, #gameScreen, #practiceScreen { width:100%; max-width:900px; flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:24px; overflow:auto; }
+
+h1,h2 { color:var(--accent); text-align:center; margin-bottom:24px; }
+
+#groupButtonsContainer { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:20px; width:100%; margin-bottom:24px; }
+#groupButtonsContainer button { padding:16px 16px; font-size:1.4rem; }
+
+.flashcard { perspective:1000px; width:95%; max-width:600px; height:55vh; display:flex; justify-content:center; align-items:center; margin-bottom:24px; }
+.card-inner { width:100%; height:100%; position:relative; transform-style:preserve-3d; transition:transform .72s; border-radius:16px; }
+.card-inner.flipped { transform:rotateY(180deg); }
+.face { position:absolute; inset:0; border-radius:16px; display:flex; justify-content:center; align-items:center; font-weight:900; font-size:4rem; backface-visibility:hidden; padding:24px; text-align:center; }
+.front { background:#121528; color:#ffd166; }
+.front .hanzi { font-family: 'Noto Sans TC', sans-serif; }
+
+.back { background:#1a1f35; color:#3dd6d0; transform:rotateY(180deg); font-size:2.5rem; }
+
+#practiceInput { font-size:1.6rem; padding:16px; border-radius:14px; text-align:center; margin-bottom:12px; }
+#practiceFeedback { margin-top:12px; font-weight:700; min-height:24px; }
+
+.controlsGame, #practiceControls { display:flex; gap:16px; flex-wrap:wrap; justify-content:center; margin-top:16px; }
+#progress, #practiceProgress { margin-top:12px; color:var(--muted); font-size:1.1rem; }
+
+</style>
+</head>
+<body>
+
+<!-- Splash -->
+<div id="splashScreen" class="card">
+  <h1>Zhuyin Flashcards</h1>
+  <div style="display:flex; gap:16px; flex-wrap:wrap; justify-content:center;">
+    <button id="btnReviewGroups">Review Zhuyin</button>
+    <button id="btnStartAll">Start Flashcards</button>
+    <button id="btnStartPractice">Pinyin Practice</button>
+  </div>
+  <p style="margin-top:16px;color:var(--muted)">Items: <span id="totalCount">0</span></p>
+</div>
+
+<!-- Group Selection / Review -->
+<div id="groupSelectionScreen" class="card hidden">
+  <h2>Review Zhuyin Groups</h2>
+  <div id="groupButtonsContainer"></div>
+  <div style="display:flex; gap:16px; flex-wrap:wrap; justify-content:center;">
+    <button id="btnReviewAll">Review All</button>
+    <button id="btnBackToSplashFromGroups">Back to Home</button>
+  </div>
+</div>
+
+<!-- Review List -->
+<div id="reviewScreen" class="card hidden">
+  <h2>Review Zhuyin</h2>
+  <div id="reviewList" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:16px; width:100%; max-height:75vh; overflow:auto;"></div>
+  <div style="display:flex; justify-content:center; margin-top:16px;">
+    <button id="btnBackToGroups">Back to Groups</button>
+  </div>
+</div>
+
+<!-- Flashcards -->
+<div id="gameScreen" class="card hidden">
+  <div class="flashcard">
+    <div class="card-inner" id="cardInner">
+      <div class="face front" id="frontZhuyin"></div>
+      <div class="face back" id="backPinyin"></div>
+    </div>
+  </div>
+  <div class="controlsGame">
+    <button id="btnFlip">Flip</button>
+    <button id="btnNext">Next</button>
+    <button id="btnShuffle">Shuffle</button>
+    <button id="btnAutoPlay">Auto Play</button>
+    <button id="btnStop">Back to Home</button>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<!-- Practice -->
+<div id="practiceScreen" class="card hidden">
+  <div id="practiceZhuyin" style="font-size:3.5rem; margin-bottom:24px;"></div>
+  <input id="practiceInput" placeholder="Type Pinyin"/>
+  <div id="practiceFeedback"></div>
+  <div id="practiceControls">
+    <button id="btnPracticeSubmit">Submit</button>
+    <button id="btnPracticeStop">Stop</button>
+    <button id="btnPracticeBack">Back to Groups</button>
+  </div>
+  <div id="practiceProgress"></div>
+</div>
+
+<script>
+const DATA = [{"zhuyin":"ㄅㄚ","pinyin":"ba","group":"ㄅ"},{"zhuyin":"ㄅㄛ","pinyin":"bo","group":"ㄅ"},{"zhuyin":"ㄅㄞ","pinyin":"bai","group":"ㄅ"},{"zhuyin":"ㄅㄟ","pinyin":"bei","group":"ㄅ"},{"zhuyin":"ㄅㄠ","pinyin":"bao","group":"ㄅ"},{"zhuyin":"ㄅㄢ","pinyin":"ban","group":"ㄅ"},{"zhuyin":"ㄅㄣ","pinyin":"ben","group":"ㄅ"},{"zhuyin":"ㄅㄤ","pinyin":"bang","group":"ㄅ"},{"zhuyin":"ㄅㄥ","pinyin":"beng","group":"ㄅ"},{"zhuyin":"ㄅㄧ","pinyin":"bi","group":"ㄅ"},{"zhuyin":"ㄅㄧㄝ","pinyin":"bie","group":"ㄅ"},{"zhuyin":"ㄅㄧㄠ","pinyin":"biao","group":"ㄅ"},{"zhuyin":"ㄅㄧㄢ","pinyin":"bian","group":"ㄅ"},{"zhuyin":"ㄅㄧㄣ","pinyin":"bin","group":"ㄅ"},{"zhuyin":"ㄅㄧㄥ","pinyin":"bing","group":"ㄅ"},{"zhuyin":"ㄅㄨ","pinyin":"bu","group":"ㄅ"},{"zhuyin":"ㄆㄚ","pinyin":"pa","group":"ㄆ"},{"zhuyin":"ㄆㄛ","pinyin":"po","group":"ㄆ"},{"zhuyin":"ㄆㄞ","pinyin":"pai","group":"ㄆ"},{"zhuyin":"ㄆㄟ","pinyin":"pei","group":"ㄆ"},{"zhuyin":"ㄆㄠ","pinyin":"pao","group":"ㄆ"},{"zhuyin":"ㄆㄡ","pinyin":"pou","group":"ㄆ"},{"zhuyin":"ㄆㄢ","pinyin":"pan","group":"ㄆ"},{"zhuyin":"ㄆㄣ","pinyin":"pen","group":"ㄆ"},{"zhuyin":"ㄆㄤ","pinyin":"pang","group":"ㄆ"},{"zhuyin":"ㄆㄥ","pinyin":"peng","group":"ㄆ"},{"zhuyin":"ㄆㄧㄝ","pinyin":"pie","group":"ㄆ"},{"zhuyin":"ㄆㄧㄠ","pinyin":"piao","group":"ㄆ"},{"zhuyin":"ㄆㄧㄢ","pinyin":"pian","group":"ㄆ"},{"zhuyin":"ㄆㄧㄣ","pinyin":"pin","group":"ㄆ"},{"zhuyin":"ㄆㄧㄥ","pinyin":"ping","group":"ㄆ"},{"zhuyin":"ㄆㄨ","pinyin":"pu","group":"ㄆ"},{"zhuyin":"ㄆ一","pinyin":"pi","group":"ㄆ"},{"zhuyin":"ㄇㄚ","pinyin":"ma","group":"ㄇ"},{"zhuyin":"ㄇㄛ","pinyin":"mo","group":"ㄇ"},{"zhuyin":"ㄇㄜ","pinyin":"me","group":"ㄇ"},{"zhuyin":"ㄇㄞ","pinyin":"mai","group":"ㄇ"},{"zhuyin":"ㄇㄟ","pinyin":"mei","group":"ㄇ"},{"zhuyin":"ㄇㄠ","pinyin":"mao","group":"ㄇ"},{"zhuyin":"ㄇㄡ","pinyin":"mou","group":"ㄇ"},{"zhuyin":"ㄇㄢ","pinyin":"man","group":"ㄇ"},{"zhuyin":"ㄇㄣ","pinyin":"men","group":"ㄇ"},{"zhuyin":"ㄇㄤ","pinyin":"mang","group":"ㄇ"},{"zhuyin":"ㄇㄥ","pinyin":"meng","group":"ㄇ"},{"zhuyin":"ㄇㄧ","pinyin":"mi","group":"ㄇ"},{"zhuyin":"ㄇㄧㄝ","pinyin":"mie","group":"ㄇ"},{"zhuyin":"ㄇㄧㄠ","pinyin":"miao","group":"ㄇ"},{"zhuyin":"ㄇㄧㄡ","pinyin":"miu","group":"ㄇ"},{"zhuyin":"ㄇㄧㄢ","pinyin":"mian","group":"ㄇ"},{"zhuyin":"ㄇㄧㄣ","pinyin":"min","group":"ㄇ"},{"zhuyin":"ㄇㄧㄥ","pinyin":"ming","group":"ㄇ"},{"zhuyin":"ㄇㄨ","pinyin":"mu","group":"ㄇ"},{"zhuyin":"ㄈㄚ","pinyin":"fa","group":"ㄈ"},{"zhuyin":"ㄈㄛ","pinyin":"fo","group":"ㄈ"},{"zhuyin":"ㄈㄟ","pinyin":"fei","group":"ㄈ"},{"zhuyin":"ㄈㄡ","pinyin":"fou","group":"ㄈ"},{"zhuyin":"ㄈㄢ","pinyin":"fan","group":"ㄈ"},{"zhuyin":"ㄈㄣ","pinyin":"fen","group":"ㄈ"},{"zhuyin":"ㄈㄤ","pinyin":"fang","group":"ㄈ"},{"zhuyin":"ㄈㄥ","pinyin":"feng","group":"ㄈ"},{"zhuyin":"ㄈㄨ","pinyin":"fu","group":"ㄈ"},{"zhuyin":"ㄉㄚ","pinyin":"da","group":"ㄉ"},{"zhuyin":"ㄉㄜ","pinyin":"de","group":"ㄉ"},{"zhuyin":"ㄉㄞ","pinyin":"dai","group":"ㄉ"},{"zhuyin":"ㄉㄟ","pinyin":"dei","group":"ㄉ"},{"zhuyin":"ㄉㄠ","pinyin":"dao","group":"ㄉ"},{"zhuyin":"ㄉㄡ","pinyin":"dou","group":"ㄉ"},{"zhuyin":"ㄉㄢ","pinyin":"dan","group":"ㄉ"},{"zhuyin":"ㄉㄤ","pinyin":"dang","group":"ㄉ"},{"zhuyin":"ㄉㄥ","pinyin":"deng","group":"ㄉ"},{"zhuyin":"ㄉㄧ","pinyin":"di","group":"ㄉ"},{"zhuyin":"ㄉㄧㄝ","pinyin":"die","group":"ㄉ"},{"zhuyin":"ㄉㄧㄠ","pinyin":"diao","group":"ㄉ"},{"zhuyin":"ㄉㄧㄡ","pinyin":"diu","group":"ㄉ"},{"zhuyin":"ㄉㄧㄢ","pinyin":"dian","group":"ㄉ"},{"zhuyin":"ㄉㄧㄥ","pinyin":"ding","group":"ㄉ"},{"zhuyin":"ㄉㄨ","pinyin":"du","group":"ㄉ"},{"zhuyin":"ㄉㄨㄛ","pinyin":"duo","group":"ㄉ"},{"zhuyin":"ㄉㄨㄟ","pinyin":"dui","group":"ㄉ"},{"zhuyin":"ㄉㄨㄢ","pinyin":"duan","group":"ㄉ"},{"zhuyin":"ㄉㄨㄣ","pinyin":"dun","group":"ㄉ"},{"zhuyin":"ㄉㄨㄥ","pinyin":"dong","group":"ㄉ"},{"zhuyin":"ㄊㄚ","pinyin":"ta","group":"ㄊ"},{"zhuyin":"ㄊㄜ","pinyin":"te","group":"ㄊ"},{"zhuyin":"ㄊㄞ","pinyin":"tai","group":"ㄊ"},{"zhuyin":"ㄊㄠ","pinyin":"tao","group":"ㄊ"},{"zhuyin":"ㄊㄡ","pinyin":"tou","group":"ㄊ"},{"zhuyin":"ㄊㄢ","pinyin":"tan","group":"ㄊ"},{"zhuyin":"ㄊㄤ","pinyin":"tang","group":"ㄊ"},{"zhuyin":"ㄊㄥ","pinyin":"teng","group":"ㄊ"},{"zhuyin":"ㄊㄧ","pinyin":"ti","group":"ㄊ"},{"zhuyin":"ㄊㄧㄝ","pinyin":"tie","group":"ㄊ"},{"zhuyin":"ㄊㄧㄠ","pinyin":"tiao","group":"ㄊ"},{"zhuyin":"ㄊㄧㄢ","pinyin":"tian","group":"ㄊ"},{"zhuyin":"ㄊㄧㄥ","pinyin":"ting","group":"ㄊ"},{"zhuyin":"ㄊㄨ","pinyin":"tu","group":"ㄊ"},{"zhuyin":"ㄊㄨㄛ","pinyin":"tuo","group":"ㄊ"},{"zhuyin":"ㄊㄨㄟ","pinyin":"tui","group":"ㄊ"},{"zhuyin":"ㄊㄨㄢ","pinyin":"tuan","group":"ㄊ"},{"zhuyin":"ㄊㄨㄣ","pinyin":"tun","group":"ㄊ"},{"zhuyin":"ㄊㄨㄥ","pinyin":"tong","group":"ㄊ"},{"zhuyin":"ㄋㄚ","pinyin":"na","group":"ㄋ"},{"zhuyin":"ㄋㄜ","pinyin":"ne","group":"ㄋ"},{"zhuyin":"ㄋㄞ","pinyin":"nai","group":"ㄋ"},{"zhuyin":"ㄋㄟ","pinyin":"nei","group":"ㄋ"},{"zhuyin":"ㄋㄠ","pinyin":"nao","group":"ㄋ"},{"zhuyin":"ㄋㄡ","pinyin":"nou","group":"ㄋ"},{"zhuyin":"ㄋㄢ","pinyin":"nan","group":"ㄋ"},{"zhuyin":"ㄋㄣ","pinyin":"nen","group":"ㄋ"},{"zhuyin":"ㄋㄤ","pinyin":"nang","group":"ㄋ"},{"zhuyin":"ㄋㄥ","pinyin":"neng","group":"ㄋ"},{"zhuyin":"ㄋㄧ","pinyin":"ni","group":"ㄋ"},{"zhuyin":"ㄋㄧㄝ","pinyin":"nie","group":"ㄋ"},{"zhuyin":"ㄋㄧㄠ","pinyin":"niao","group":"ㄋ"},{"zhuyin":"ㄋㄧㄡ","pinyin":"niu","group":"ㄋ"},{"zhuyin":"ㄋㄧㄢ","pinyin":"nian","group":"ㄋ"},{"zhuyin":"ㄋㄧㄣ","pinyin":"nin","group":"ㄋ"},{"zhuyin":"ㄋㄧㄤ","pinyin":"niang","group":"ㄋ"},{"zhuyin":"ㄋㄧㄥ","pinyin":"ning","group":"ㄋ"},{"zhuyin":"ㄋㄨ","pinyin":"nu","group":"ㄋ"},{"zhuyin":"ㄋㄨㄛ","pinyin":"nuo","group":"ㄋ"},{"zhuyin":"ㄋㄨㄢ","pinyin":"nuan","group":"ㄋ"},{"zhuyin":"ㄋㄨㄥ","pinyin":"nong","group":"ㄋ"},{"zhuyin":"ㄋㄩ","pinyin":"nu","group":"ㄋ"},{"zhuyin":"ㄋㄩㄝ","pinyin":"nue","group":"ㄋ"},{"zhuyin":"ㄌㄚ","pinyin":"la","group":"ㄌ"},{"zhuyin":"ㄌㄜ","pinyin":"le","group":"ㄌ"},{"zhuyin":"ㄌㄞ","pinyin":"lai","group":"ㄌ"},{"zhuyin":"ㄌㄟ","pinyin":"lei","group":"ㄌ"},{"zhuyin":"ㄌㄠ","pinyin":"lao","group":"ㄌ"},{"zhuyin":"ㄌㄡ","pinyin":"lou","group":"ㄌ"},{"zhuyin":"ㄌㄢ","pinyin":"lan","group":"ㄌ"},{"zhuyin":"ㄌㄤ","pinyin":"lang","group":"ㄌ"},{"zhuyin":"ㄌㄥ","pinyin":"leng","group":"ㄌ"},{"zhuyin":"ㄌㄧ","pinyin":"li","group":"ㄌ"},{"zhuyin":"ㄌㄧㄚ","pinyin":"lia","group":"ㄌ"},{"zhuyin":"ㄌㄧㄝ","pinyin":"lie","group":"ㄌ"},{"zhuyin":"ㄌㄧㄠ","pinyin":"liao","group":"ㄌ"},{"zhuyin":"ㄌㄧㄡ","pinyin":"liu","group":"ㄌ"},{"zhuyin":"ㄌㄧㄢ","pinyin":"lian","group":"ㄌ"},{"zhuyin":"ㄌㄧㄣ","pinyin":"lin","group":"ㄌ"},{"zhuyin":"ㄌㄧㄤ","pinyin":"liang","group":"ㄌ"},{"zhuyin":"ㄌㄧㄥ","pinyin":"ling","group":"ㄌ"},{"zhuyin":"ㄌㄨ","pinyin":"lu","group":"ㄌ"},{"zhuyin":"ㄌㄨㄛ","pinyin":"luo","group":"ㄌ"},{"zhuyin":"ㄌㄨㄢ","pinyin":"luan","group":"ㄌ"},{"zhuyin":"ㄌㄨㄣ","pinyin":"lun","group":"ㄌ"},{"zhuyin":"ㄌㄨㄥ","pinyin":"long","group":"ㄌ"},{"zhuyin":"ㄌㄩ","pinyin":"lu","group":"ㄌ"},{"zhuyin":"ㄌㄩㄝ","pinyin":"lue","group":"ㄌ"},{"zhuyin":"ㄌㄩㄢ","pinyin":"luan","group":"ㄌ"},{"zhuyin":"ㄍㄚ","pinyin":"ga","group":"ㄍ"},{"zhuyin":"ㄍㄜ","pinyin":"ge","group":"ㄍ"},{"zhuyin":"ㄍㄞ","pinyin":"gai","group":"ㄍ"},{"zhuyin":"ㄍㄟ","pinyin":"gei","group":"ㄍ"},{"zhuyin":"ㄍㄠ","pinyin":"gao","group":"ㄍ"},{"zhuyin":"ㄍㄡ","pinyin":"gou","group":"ㄍ"},{"zhuyin":"ㄍㄢ","pinyin":"gan","group":"ㄍ"},{"zhuyin":"ㄍㄣ","pinyin":"gen","group":"ㄍ"},{"zhuyin":"ㄍㄤ","pinyin":"gang","group":"ㄍ"},{"zhuyin":"ㄍㄥ","pinyin":"geng","group":"ㄍ"},{"zhuyin":"ㄍㄨ","pinyin":"gu","group":"ㄍ"},{"zhuyin":"ㄍㄨㄚ","pinyin":"gua","group":"ㄍ"},{"zhuyin":"ㄍㄨㄛ","pinyin":"guo","group":"ㄍ"},{"zhuyin":"ㄍㄨㄞ","pinyin":"guai","group":"ㄍ"},{"zhuyin":"ㄍㄨㄟ","pinyin":"gui","group":"ㄍ"},{"zhuyin":"ㄍㄨㄢ","pinyin":"guan","group":"ㄍ"},{"zhuyin":"ㄍㄨㄣ","pinyin":"gun","group":"ㄍ"},{"zhuyin":"ㄍㄨㄤ","pinyin":"guang","group":"ㄍ"},{"zhuyin":"ㄍㄨㄥ","pinyin":"gong","group":"ㄍ"},{"zhuyin":"ㄎㄚ","pinyin":"ka","group":"ㄎ"},{"zhuyin":"ㄎㄜ","pinyin":"ke","group":"ㄎ"},{"zhuyin":"ㄎㄞ","pinyin":"kai","group":"ㄎ"},{"zhuyin":"ㄎㄠ","pinyin":"kao","group":"ㄎ"},{"zhuyin":"ㄎㄡ","pinyin":"kou","group":"ㄎ"},{"zhuyin":"ㄎㄢ","pinyin":"kan","group":"ㄎ"},{"zhuyin":"ㄎㄣ","pinyin":"ken","group":"ㄎ"},{"zhuyin":"ㄎㄤ","pinyin":"kang","group":"ㄎ"},{"zhuyin":"ㄎㄥ","pinyin":"keng","group":"ㄎ"},{"zhuyin":"ㄎㄨ","pinyin":"ku","group":"ㄎ"},{"zhuyin":"ㄎㄨㄚ","pinyin":"kua","group":"ㄎ"},{"zhuyin":"ㄎㄨㄛ","pinyin":"kuo","group":"ㄎ"},{"zhuyin":"ㄎㄨㄞ","pinyin":"kuai","group":"ㄎ"},{"zhuyin":"ㄎㄨㄟ","pinyin":"kui","group":"ㄎ"},{"zhuyin":"ㄎㄨㄢ","pinyin":"kuan","group":"ㄎ"},{"zhuyin":"ㄎㄨㄣ","pinyin":"kun","group":"ㄎ"},{"zhuyin":"ㄎㄨㄤ","pinyin":"kuang","group":"ㄎ"},{"zhuyin":"ㄎㄨㄥ","pinyin":"kong","group":"ㄎ"},{"zhuyin":"ㄏㄚ","pinyin":"ha","group":"ㄏ"},{"zhuyin":"ㄏㄜ","pinyin":"he","group":"ㄏ"},{"zhuyin":"ㄏㄞ","pinyin":"hai","group":"ㄏ"},{"zhuyin":"ㄏㄟ","pinyin":"hei","group":"ㄏ"},{"zhuyin":"ㄏㄠ","pinyin":"hao","group":"ㄏ"},{"zhuyin":"ㄏㄡ","pinyin":"hou","group":"ㄏ"},{"zhuyin":"ㄏㄢ","pinyin":"han","group":"ㄏ"},{"zhuyin":"ㄏㄣ","pinyin":"hen","group":"ㄏ"},{"zhuyin":"ㄏㄤ","pinyin":"hang","group":"ㄏ"},{"zhuyin":"ㄏㄥ","pinyin":"heng","group":"ㄏ"},{"zhuyin":"ㄏㄨ","pinyin":"hu","group":"ㄏ"},{"zhuyin":"ㄏㄨㄚ","pinyin":"hua","group":"ㄏ"},{"zhuyin":"ㄏㄨㄛ","pinyin":"huo","group":"ㄏ"},{"zhuyin":"ㄏㄨㄞ","pinyin":"huai","group":"ㄏ"},{"zhuyin":"ㄏㄨㄟ","pinyin":"hui","group":"ㄏ"},{"zhuyin":"ㄏㄨㄢ","pinyin":"huan","group":"ㄏ"},{"zhuyin":"ㄏㄨㄣ","pinyin":"hun","group":"ㄏ"},{"zhuyin":"ㄏㄨㄤ","pinyin":"huang","group":"ㄏ"},{"zhuyin":"ㄏㄨㄥ","pinyin":"hong","group":"ㄏ"},{"zhuyin":"ㄐㄧ","pinyin":"ji","group":"ㄐ"},{"zhuyin":"ㄐㄧㄚ","pinyin":"jia","group":"ㄐ"},{"zhuyin":"ㄐㄧㄝ","pinyin":"jie","group":"ㄐ"},{"zhuyin":"ㄐㄧㄠ","pinyin":"jiao","group":"ㄐ"},{"zhuyin":"ㄐㄧㄡ","pinyin":"jiu","group":"ㄐ"},{"zhuyin":"ㄐㄧㄢ","pinyin":"jian","group":"ㄐ"},{"zhuyin":"ㄐㄧㄣ","pinyin":"jin","group":"ㄐ"},{"zhuyin":"ㄐㄧㄤ","pinyin":"jiang","group":"ㄐ"},{"zhuyin":"ㄐㄧㄥ","pinyin":"jing","group":"ㄐ"},{"zhuyin":"ㄐㄩ","pinyin":"ju","group":"ㄐ"},{"zhuyin":"ㄐㄩㄝ","pinyin":"jue","group":"ㄐ"},{"zhuyin":"ㄐㄩㄢ","pinyin":"juan","group":"ㄐ"},{"zhuyin":"ㄐㄩㄣ","pinyin":"jun","group":"ㄐ"},{"zhuyin":"ㄐㄩㄥ","pinyin":"jiong","group":"ㄐ"},{"zhuyin":"ㄑㄧ","pinyin":"qi","group":"ㄑ"},{"zhuyin":"ㄑㄧㄚ","pinyin":"qia","group":"ㄑ"},{"zhuyin":"ㄑㄧㄝ","pinyin":"qie","group":"ㄑ"},{"zhuyin":"ㄑㄧㄠ","pinyin":"qiao","group":"ㄑ"},{"zhuyin":"ㄑㄧㄡ","pinyin":"qiu","group":"ㄑ"},{"zhuyin":"ㄑㄧㄢ","pinyin":"qian","group":"ㄑ"},{"zhuyin":"ㄑㄧㄣ","pinyin":"qin","group":"ㄑ"},{"zhuyin":"ㄑㄧㄤ","pinyin":"qiang","group":"ㄑ"},{"zhuyin":"ㄑㄧㄥ","pinyin":"qing","group":"ㄑ"},{"zhuyin":"ㄑㄩ","pinyin":"qu","group":"ㄑ"},{"zhuyin":"ㄑㄩㄝ","pinyin":"que","group":"ㄑ"},{"zhuyin":"ㄑㄩㄢ","pinyin":"quan","group":"ㄑ"},{"zhuyin":"ㄑㄩㄣ","pinyin":"qun","group":"ㄑ"},{"zhuyin":"ㄑㄩㄥ","pinyin":"qiong","group":"ㄑ"},{"zhuyin":"ㄒㄧ","pinyin":"xi","group":"ㄒ"},{"zhuyin":"ㄒㄧㄚ","pinyin":"xia","group":"ㄒ"},{"zhuyin":"ㄒㄧㄝ","pinyin":"xie","group":"ㄒ"},{"zhuyin":"ㄒㄧㄠ","pinyin":"xiao","group":"ㄒ"},{"zhuyin":"ㄒㄧㄡ","pinyin":"xiu","group":"ㄒ"},{"zhuyin":"ㄒㄧㄢ","pinyin":"xian","group":"ㄒ"},{"zhuyin":"ㄒㄧㄣ","pinyin":"xin","group":"ㄒ"},{"zhuyin":"ㄒㄧㄤ","pinyin":"xiang","group":"ㄒ"},{"zhuyin":"ㄒㄧㄥ","pinyin":"xing","group":"ㄒ"},{"zhuyin":"ㄒㄩ","pinyin":"xu","group":"ㄒ"},{"zhuyin":"ㄒㄩㄝ","pinyin":"xue","group":"ㄒ"},{"zhuyin":"ㄒㄩㄢ","pinyin":"xuan","group":"ㄒ"},{"zhuyin":"ㄒㄩㄣ","pinyin":"xun","group":"ㄒ"},{"zhuyin":"ㄒㄩㄥ","pinyin":"xiong","group":"ㄒ"},{"zhuyin":"ㄓ","pinyin":"zhi","group":"ㄓ"},{"zhuyin":"ㄓㄚ","pinyin":"zha","group":"ㄓ"},{"zhuyin":"ㄓㄜ","pinyin":"zhe","group":"ㄓ"},{"zhuyin":"ㄓㄞ","pinyin":"zhai","group":"ㄓ"},{"zhuyin":"ㄓㄟ","pinyin":"zhei","group":"ㄓ"},{"zhuyin":"ㄓㄠ","pinyin":"zhao","group":"ㄓ"},{"zhuyin":"ㄓㄡ","pinyin":"zhou","group":"ㄓ"},{"zhuyin":"ㄓㄢ","pinyin":"zhan","group":"ㄓ"},{"zhuyin":"ㄓㄣ","pinyin":"zhen","group":"ㄓ"},{"zhuyin":"ㄓㄤ","pinyin":"zhang","group":"ㄓ"},{"zhuyin":"ㄓㄥ","pinyin":"zheng","group":"ㄓ"},{"zhuyin":"ㄓㄨ","pinyin":"zhu","group":"ㄓ"},{"zhuyin":"ㄓㄨㄚ","pinyin":"zhua","group":"ㄓ"},{"zhuyin":"ㄓㄨㄛ","pinyin":"zhuo","group":"ㄓ"},{"zhuyin":"ㄓㄨㄞ","pinyin":"zhuai","group":"ㄓ"},{"zhuyin":"ㄓㄨㄟ","pinyin":"zhui","group":"ㄓ"},{"zhuyin":"ㄓㄨㄢ","pinyin":"zhuan","group":"ㄓ"},{"zhuyin":"ㄓㄨㄣ","pinyin":"zhun","group":"ㄓ"},{"zhuyin":"ㄓㄨㄤ","pinyin":"zhuang","group":"ㄓ"},{"zhuyin":"ㄓㄨㄥ","pinyin":"zhong","group":"ㄓ"},{"zhuyin":"ㄔ","pinyin":"chi","group":"ㄔ"},{"zhuyin":"ㄔㄚ","pinyin":"cha","group":"ㄔ"},{"zhuyin":"ㄔㄜ","pinyin":"che","group":"ㄔ"},{"zhuyin":"ㄔㄞ","pinyin":"chai","group":"ㄔ"},{"zhuyin":"ㄔㄠ","pinyin":"chao","group":"ㄔ"},{"zhuyin":"ㄔㄡ","pinyin":"chou","group":"ㄔ"},{"zhuyin":"ㄔㄢ","pinyin":"chan","group":"ㄔ"},{"zhuyin":"ㄔㄣ","pinyin":"chen","group":"ㄔ"},{"zhuyin":"ㄔㄤ","pinyin":"chang","group":"ㄔ"},{"zhuyin":"ㄔㄥ","pinyin":"cheng","group":"ㄔ"},{"zhuyin":"ㄔㄨ","pinyin":"chu","group":"ㄔ"},{"zhuyin":"ㄔㄨㄛ","pinyin":"chuo","group":"ㄔ"},{"zhuyin":"ㄔㄨㄞ","pinyin":"chuai","group":"ㄔ"},{"zhuyin":"ㄔㄨㄟ","pinyin":"chui","group":"ㄔ"},{"zhuyin":"ㄔㄨㄢ","pinyin":"chuan","group":"ㄔ"},{"zhuyin":"ㄔㄨㄣ","pinyin":"chun","group":"ㄔ"},{"zhuyin":"ㄔㄨㄤ","pinyin":"chuang","group":"ㄔ"},{"zhuyin":"ㄔㄨㄥ","pinyin":"chong","group":"ㄔ"},{"zhuyin":"ㄕ","pinyin":"shi","group":"ㄕ"},{"zhuyin":"ㄕㄚ","pinyin":"sha","group":"ㄕ"},{"zhuyin":"ㄕㄜ","pinyin":"she","group":"ㄕ"},{"zhuyin":"ㄕㄞ","pinyin":"shai","group":"ㄕ"},{"zhuyin":"ㄕㄟ","pinyin":"shei","group":"ㄕ"},{"zhuyin":"ㄕㄠ","pinyin":"shao","group":"ㄕ"},{"zhuyin":"ㄕㄡ","pinyin":"shou","group":"ㄕ"},{"zhuyin":"ㄕㄢ","pinyin":"shan","group":"ㄕ"},{"zhuyin":"ㄕㄣ","pinyin":"shen","group":"ㄕ"},{"zhuyin":"ㄕㄤ","pinyin":"shang","group":"ㄕ"},{"zhuyin":"ㄕㄥ","pinyin":"sheng","group":"ㄕ"},{"zhuyin":"ㄕㄨ","pinyin":"shu","group":"ㄕ"},{"zhuyin":"ㄕㄨㄚ","pinyin":"shua","group":"ㄕ"},{"zhuyin":"ㄕㄨㄛ","pinyin":"shuo","group":"ㄕ"},{"zhuyin":"ㄕㄨㄞ","pinyin":"shuai","group":"ㄕ"},{"zhuyin":"ㄕㄨㄟ","pinyin":"shui","group":"ㄕ"},{"zhuyin":"ㄕㄨㄢ","pinyin":"shuan","group":"ㄕ"},{"zhuyin":"ㄕㄨㄣ","pinyin":"shun","group":"ㄕ"},{"zhuyin":"ㄕㄨㄤ","pinyin":"shuang","group":"ㄕ"},{"zhuyin":"ㄖ","pinyin":"ri","group":"ㄖ"},{"zhuyin":"ㄖㄜ","pinyin":"re","group":"ㄖ"},{"zhuyin":"ㄖㄠ","pinyin":"rao","group":"ㄖ"},{"zhuyin":"ㄖㄡ","pinyin":"rou","group":"ㄖ"},{"zhuyin":"ㄖㄢ","pinyin":"ran","group":"ㄖ"},{"zhuyin":"ㄖㄣ","pinyin":"ren","group":"ㄖ"},{"zhuyin":"ㄖㄤ","pinyin":"rang","group":"ㄖ"},{"zhuyin":"ㄖㄥ","pinyin":"reng","group":"ㄖ"},{"zhuyin":"ㄖㄨ","pinyin":"ru","group":"ㄖ"},{"zhuyin":"ㄖㄨㄛ","pinyin":"ruo","group":"ㄖ"},{"zhuyin":"ㄖㄨㄟ","pinyin":"rui","group":"ㄖ"},{"zhuyin":"ㄖㄨㄢ","pinyin":"ruan","group":"ㄖ"},{"zhuyin":"ㄖㄨㄣ","pinyin":"run","group":"ㄖ"},{"zhuyin":"ㄖㄨㄥ","pinyin":"rong","group":"ㄖ"},{"zhuyin":"ㄗ","pinyin":"zi","group":"ㄗ"},{"zhuyin":"ㄗㄚ","pinyin":"za","group":"ㄗ"},{"zhuyin":"ㄗㄜ","pinyin":"ze","group":"ㄗ"},{"zhuyin":"ㄗㄞ","pinyin":"zai","group":"ㄗ"},{"zhuyin":"ㄗㄟ","pinyin":"zei","group":"ㄗ"},{"zhuyin":"ㄗㄠ","pinyin":"zao","group":"ㄗ"},{"zhuyin":"ㄗㄡ","pinyin":"zou","group":"ㄗ"},{"zhuyin":"ㄗㄢ","pinyin":"zan","group":"ㄗ"},{"zhuyin":"ㄗㄣ","pinyin":"zen","group":"ㄗ"},{"zhuyin":"ㄗㄤ","pinyin":"zang","group":"ㄗ"},{"zhuyin":"ㄗㄥ","pinyin":"zeng","group":"ㄗ"},{"zhuyin":"ㄗㄨ","pinyin":"zu","group":"ㄗ"},{"zhuyin":"ㄗㄨㄛ","pinyin":"zuo","group":"ㄗ"},{"zhuyin":"ㄗㄨㄟ","pinyin":"zui","group":"ㄗ"},{"zhuyin":"ㄗㄨㄢ","pinyin":"zuan","group":"ㄗ"},{"zhuyin":"ㄗㄨㄣ","pinyin":"zun","group":"ㄗ"},{"zhuyin":"ㄗㄨㄥ","pinyin":"zong","group":"ㄗ"},{"zhuyin":"ㄘ","pinyin":"ci","group":"ㄘ"},{"zhuyin":"ㄘㄚ","pinyin":"ca","group":"ㄘ"},{"zhuyin":"ㄘㄜ","pinyin":"ce","group":"ㄘ"},{"zhuyin":"ㄘㄞ","pinyin":"cai","group":"ㄘ"},{"zhuyin":"ㄘㄠ","pinyin":"cao","group":"ㄘ"},{"zhuyin":"ㄘㄡ","pinyin":"cou","group":"ㄘ"},{"zhuyin":"ㄘㄢ","pinyin":"can","group":"ㄘ"},{"zhuyin":"ㄘㄣ","pinyin":"cen","group":"ㄘ"},{"zhuyin":"ㄘㄤ","pinyin":"cang","group":"ㄘ"},{"zhuyin":"ㄘㄥ","pinyin":"ceng","group":"ㄘ"},{"zhuyin":"ㄘㄨ","pinyin":"cu","group":"ㄘ"},{"zhuyin":"ㄘㄨㄛ","pinyin":"cuo","group":"ㄘ"},{"zhuyin":"ㄘㄨㄟ","pinyin":"cui","group":"ㄘ"},{"zhuyin":"ㄘㄨㄢ","pinyin":"cuan","group":"ㄘ"},{"zhuyin":"ㄘㄨㄣ","pinyin":"cun","group":"ㄘ"},{"zhuyin":"ㄘㄨㄥ","pinyin":"cong","group":"ㄘ"},{"zhuyin":"ㄙ","pinyin":"si","group":"ㄙ"},{"zhuyin":"ㄙㄚ","pinyin":"sa","group":"ㄙ"},{"zhuyin":"ㄙㄜ","pinyin":"se","group":"ㄙ"},{"zhuyin":"ㄙㄞ","pinyin":"sai","group":"ㄙ"},{"zhuyin":"ㄙㄠ","pinyin":"sao","group":"ㄙ"},{"zhuyin":"ㄙㄡ","pinyin":"sou","group":"ㄙ"},{"zhuyin":"ㄙㄢ","pinyin":"san","group":"ㄙ"},{"zhuyin":"ㄙㄣ","pinyin":"sen","group":"ㄙ"},{"zhuyin":"ㄙㄤ","pinyin":"sang","group":"ㄙ"},{"zhuyin":"ㄙㄥ","pinyin":"seng","group":"ㄙ"},{"zhuyin":"ㄙㄨ","pinyin":"su","group":"ㄙ"},{"zhuyin":"ㄙㄨㄛ","pinyin":"suo","group":"ㄙ"},{"zhuyin":"ㄙㄨㄟ","pinyin":"sui","group":"ㄙ"},{"zhuyin":"ㄙㄨㄢ","pinyin":"suan","group":"ㄙ"},{"zhuyin":"ㄙㄨㄣ","pinyin":"sun","group":"ㄙ"},{"zhuyin":"ㄙㄨㄥ","pinyin":"song","group":"ㄙ"},{"zhuyin":"ㄚ","pinyin":"a","group":"ㄚㄜㄞㄠㄡㄢㄣㄤㄥㄦ"},{"zhuyin":"ㄜ","pinyin":"e","group":"ㄚㄜㄞㄠㄡㄢㄣㄤㄥㄦ"},{"zhuyin":"ㄞ","pinyin":"ai","group":"ㄚㄜㄞㄠㄡㄢㄣㄤㄥㄦ"},{"zhuyin":"ㄠ","pinyin":"ao","group":"ㄚㄜㄞㄠㄡㄢㄣㄤㄥㄦ"},{"zhuyin":"ㄡ","pinyin":"ou","group":"ㄚㄜㄞㄠㄡㄢㄣㄤㄥㄦ"},{"zhuyin":"ㄢ","pinyin":"an","group":"ㄚㄜㄞㄠㄡㄢㄣㄤㄥㄦ"},{"zhuyin":"ㄣ","pinyin":"en","group":"ㄚㄜㄞㄠㄡㄢㄣㄤㄥㄦ"},{"zhuyin":"ㄤ","pinyin":"ang","group":"ㄚㄜㄞㄠㄡㄢㄣㄤㄥㄦ"},{"zhuyin":"ㄥ","pinyin":"eng","group":"ㄚㄜㄞㄠㄡㄢㄣㄤㄥㄦ"},{"zhuyin":"ㄦ","pinyin":"er","group":"ㄚㄜㄞㄠㄡㄢㄣㄤㄥㄦ"},{"zhuyin":"ㄧ","pinyin":"yi","group":"ㄧ"},{"zhuyin":"ㄧㄚ","pinyin":"ya","group":"ㄧ"},{"zhuyin":"ㄧㄛ","pinyin":"yo","group":"ㄧ"},{"zhuyin":"ㄧㄝ","pinyin":"ye","group":"ㄧ"},{"zhuyin":"ㄧㄞ","pinyin":"yai","group":"ㄧ"},{"zhuyin":"ㄧㄠ","pinyin":"yao","group":"ㄧ"},{"zhuyin":"ㄧㄡ","pinyin":"you","group":"ㄧ"},{"zhuyin":"ㄧㄢ","pinyin":"yan","group":"ㄧ"},{"zhuyin":"ㄧㄣ","pinyin":"yin","group":"ㄧ"},{"zhuyin":"ㄧㄤ","pinyin":"yang","group":"ㄧ"},{"zhuyin":"ㄧㄥ","pinyin":"ying","group":"ㄧ"},{"zhuyin":"ㄨ","pinyin":"wu","group":"ㄨ"},{"zhuyin":"ㄨㄚ","pinyin":"wa","group":"ㄨ"},{"zhuyin":"ㄨㄛ","pinyin":"wo","group":"ㄨ"},{"zhuyin":"ㄨㄞ","pinyin":"wai","group":"ㄨ"},{"zhuyin":"ㄨㄟ","pinyin":"wei","group":"ㄨ"},{"zhuyin":"ㄨㄢ","pinyin":"wan","group":"ㄨ"},{"zhuyin":"ㄨㄣ","pinyin":"wen","group":"ㄨ"},{"zhuyin":"ㄨㄤ","pinyin":"wang","group":"ㄨ"},{"zhuyin":"ㄨㄥ","pinyin":"weng","group":"ㄨ"},{"zhuyin":"ㄩ","pinyin":"yu","group":"ㄩ"},{"zhuyin":"ㄩㄝ","pinyin":"yue","group":"ㄩ"},{"zhuyin":"ㄩㄢ","pinyin":"yuan","group":"ㄩ"},{"zhuyin":"ㄩㄣ","pinyin":"yun","group":"ㄩ"},{"zhuyin":"ㄩㄥ","pinyin":"yong","group":"ㄩ"}];
+let deck = DATA.slice(), filteredDeck = [], shuffledDeck=[], index=0, autoInterval=null;
+let practiceDeck=[], practiceWrong=[], practiceIndex=0, practiceLocked=false;
+
+// --- Splash ---
+document.getElementById('totalCount').textContent = DATA.length;
+document.getElementById('btnReviewGroups').addEventListener('click',()=>{
+  splashScreen.classList.add('hidden'); groupSelectionScreen.classList.remove('hidden'); renderGroupButtons();
+});
+document.getElementById('btnStartAll').addEventListener('click',()=>{ splashScreen.classList.add('hidden'); startFlashcards(deck); });
+document.getElementById('btnStartPractice').addEventListener('click',()=>{ splashScreen.classList.add('hidden'); startPractice(deck); });
+
+// --- Group Buttons ---
+function renderGroupButtons(){
+  const container = document.getElementById('groupButtonsContainer');
+  container.innerHTML='';
+  const groups = Array.from(new Set(DATA.map(d=>d.group))).sort();
+  groups.forEach(g=>{
+    const btn = document.createElement('button');
+    btn.textContent = g; btn.onclick = ()=>{ startGroupReview(g); };
+    container.appendChild(btn);
+  });
+}
+document.getElementById('btnReviewAll').addEventListener('click',()=> startGroupReview());
+document.getElementById('btnBackToSplashFromGroups').addEventListener('click',()=>{ groupSelectionScreen.classList.add('hidden'); splashScreen.classList.remove('hidden'); });
+
+// --- Review ---
+function startGroupReview(group=null){
+  filteredDeck = group ? DATA.filter(d=>d.group===group) : DATA.slice();
+  shuffledDeck = filteredDeck.slice(); shuffleArray(shuffledDeck);
+  renderReview();
+  groupSelectionScreen.classList.add('hidden'); reviewScreen.classList.remove('hidden');
+}
+function renderReview(){
+  const container = document.getElementById('reviewList');
+  container.innerHTML='';
+  shuffledDeck.forEach(w=>{
+    const div = document.createElement('div');
+    div.className='card';
+    div.innerHTML='<div style="font-size:2.5rem;">'+w.zhuyin+'</div><div style="font-size:1.8rem;color:var(--accent-2)">'+w.pinyin+'</div>';
+    container.appendChild(div);
+  });
+}
+document.getElementById('btnBackToGroups').addEventListener('click',()=>{ reviewScreen.classList.add('hidden'); groupSelectionScreen.classList.remove('hidden'); });
+
+// --- Flashcards ---
+function startFlashcards(deckList){
+  shuffledDeck = deckList.slice(); shuffleArray(shuffledDeck); index=0;
+  reviewScreen.classList.add('hidden'); gameScreen.classList.remove('hidden'); showCard();
+}
+function showCard(){
+  if(!shuffledDeck.length) return;
+  const w = shuffledDeck[index];
+  document.getElementById('frontZhuyin').textContent = w.zhuyin;
+  document.getElementById('backPinyin').textContent = w.pinyin;
+  document.getElementById('progress').textContent = (index+1)+' / '+shuffledDeck.length;
+  document.getElementById('cardInner').classList.remove('flipped');
+}
+document.getElementById('btnFlip').addEventListener('click',()=>{ document.getElementById('cardInner').classList.toggle('flipped'); });
+document.getElementById('btnNext').addEventListener('click',()=>{
+  index=(index+1)%shuffledDeck.length; showCard(); stopAutoPlay();
+});
+document.getElementById('btnShuffle').addEventListener('click',()=>{ shuffleArray(shuffledDeck); index=0; showCard(); });
+document.getElementById('btnStop').addEventListener('click',()=>{
+  stopAutoPlay(); gameScreen.classList.add('hidden'); splashScreen.classList.remove('hidden');
+});
+
+// --- Flashcard Auto Play ---
+document.getElementById('btnAutoPlay').addEventListener('click',()=>{
+  if(autoInterval){ stopAutoPlay(); } else { startAutoPlay(); }
+});
+
+function startAutoPlay(){
+  if(autoInterval) return;
+  let showBack = true; // Track flip state
+  autoInterval = setInterval(()=>{
+    if(!showBack){
+      // Flip to back
+      document.getElementById('cardInner').classList.add('flipped');
+      showBack = true;
+    } else {
+      // Flip to front and move to next card
+      document.getElementById('cardInner').classList.remove('flipped');
+      index = (index+1) % shuffledDeck.length;
+      showCard();
+      showBack = false;
+    }
+  }, 3000); // 2s per flip side
+}
+
+function stopAutoPlay(){
+  clearInterval(autoInterval);
+  autoInterval = null;
+  document.getElementById('cardInner').classList.remove('flipped'); // reset flip
+}
+// --- Practice ---
+function startPractice(deckList){
+  practiceDeck = deckList.slice(); shuffleArray(practiceDeck); practiceWrong=[]; practiceIndex=0;
+  reviewScreen.classList.add('hidden'); gameScreen.classList.add('hidden'); practiceScreen.classList.remove('hidden');
+  showPracticeCard();
+}
+function showPracticeCard(){
+  if(practiceDeck.length===0){ practiceFeedback.textContent='Practice complete!'; return; }
+  if(practiceIndex>=practiceDeck.length){
+    if(practiceWrong.length){ practiceDeck=practiceWrong.slice(); practiceWrong=[]; practiceIndex=0; } else { practiceFeedback.textContent='Practice complete!'; return; }
+  }
+  const w = practiceDeck[practiceIndex];
+  document.getElementById('practiceZhuyin').textContent = w.zhuyin;
+  practiceInput.value=''; practiceFeedback.textContent=''; practiceInput.disabled=false; practiceLocked=false;
+  document.getElementById('practiceProgress').textContent = (practiceIndex+1)+' / '+practiceDeck.length;
+  practiceInput.focus();
+}
+function checkPractice(){
+  if(practiceLocked) return; practiceLocked=true;
+  const w = practiceDeck[practiceIndex]; if(!w) return;
+  const ans = practiceInput.value.trim().toLowerCase();
+  const correct = w.pinyin.trim().toLowerCase();
+  if(ans===correct){ practiceFeedback.textContent='Correct!'; practiceFeedback.style.color='var(--ok)'; }
+  else { practiceFeedback.textContent='Incorrect: '+w.pinyin; practiceFeedback.style.color='var(--danger)'; practiceWrong.push(w); }
+  practiceInput.disabled=true;
+  setTimeout(()=>{ practiceIndex++; showPracticeCard(); },1000);
+}
+document.getElementById('btnPracticeSubmit').addEventListener('click',checkPractice);
+practiceInput.addEventListener('keydown', e=>{ if(e.key==='Enter') checkPractice(); });
+document.getElementById('btnPracticeStop').addEventListener('click',()=>{ practiceScreen.classList.add('hidden'); splashScreen.classList.remove('hidden'); });
+document.getElementById('btnPracticeBack').addEventListener('click',()=>{ practiceScreen.classList.add('hidden'); groupSelectionScreen.classList.remove('hidden'); });
+
+// --- Utils ---
+function shuffleArray(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}}
+
+</script>
+</body>
+</html>
