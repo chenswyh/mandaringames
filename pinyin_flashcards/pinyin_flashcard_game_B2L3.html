@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Pinyin Flashcards — Play</title>
+<style>
+  :root{
+    --bg1:#0f1220; --bg2:#1a1f35; --card:#121528; --accent:#3dd6d0; --accent-2:#ffd166;
+    --text:#e6e9f2; --muted:#a8b0c7; --glass: rgba(255,255,255,0.04);
+    --success-bg: #1f3b3a; --success-border: #3dd6d0; --success-text: #3dd6d0;
+    --error-bg: #41242e; --error-border: #f43f5e; --error-text: #f43f5e;
+  }
+  * { box-sizing:border-box; }
+  html, body{ height:100%; margin:0; font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial; background:linear-gradient(180deg,var(--bg1),var(--bg2)); color:var(--text); }
+  .wrap{ max-width:1100px; margin:18px auto; padding:18px; display:flex; flex-direction:column; gap:18px; align-items:center; }
+  .card{ width:100%; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid var(--glass); border-radius:14px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.4); }
+  h1{ margin:0 0 8px; font-size:clamp(20px,2.6vw,30px); letter-spacing:.6px; }
+  p.lead{ margin:0; color:var(--muted); }
+  .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  button{ appearance:none; border:none; border-radius:10px; padding:10px 14px; font-weight:700; cursor:pointer; background:var(--accent); color:#071016; }
+  button.disabled{ background:var(--muted); cursor:not-allowed; opacity:0.6; }
+  .muted{ color:var(--muted); font-size:13px; }
+  .hidden{ display:none !important; }
+  .mutedSmall{ color:var(--muted); font-size:13px; }
+  .expandBtn{ background:transparent; border:1px solid rgba(255,255,255,0.04); color:var(--text); padding:8px 10px; border-radius:8px; }
+  .toast{ position:fixed; bottom:20px; left:50%; transform:translateX(-50%); padding:12px 20px; border-radius:8px; z-index:1000; font-size:14px; box-shadow:0 4px 12px rgba(0,0,0,0.3); opacity:0; transition:opacity .3s ease-in-out; }
+  .toast.show{ opacity:1; }
+  .toast.success{ background:var(--success-bg); border:1px solid var(--success-border); color:var(--success-text); }
+  .toast.error{ background:var(--error-bg); border:1px solid var(--error-border); color:var(--error-text); }
+  .toast.info{ background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.1); color:var(--text); }
+
+  /* Review */
+  #reviewContainer{ width:100%; max-height:56vh; overflow:auto; border-radius:10px; padding:8px; background:rgba(0,0,0,0.18); border:1px solid rgba(255,255,255,0.03); }
+  #reviewList{ display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; }
+  .reviewItem{ background:var(--card); border-radius:10px; padding:10px; box-shadow:0 6px 18px rgba(0,0,0,0.4); text-align:center; }
+  .reviewHanzi{ font-size:20px; font-weight:700; margin-bottom:6px; }
+  .reviewPinyin{ color:var(--accent-2); font-size:13px; margin-bottom:6px; }
+  .reviewMean{ color:var(--muted); font-size:12px; }
+
+  /* Game */
+
+  #gameScreen {
+  width: 100%;
+  min-height: 100vh;         /* Full viewport height */
+  display: flex;
+  flex-direction: column;
+  align-items: center;       /* Horizontal centering */
+  justify-content: center;   /* Vertical centering */
+  gap: 14px;
+}
+
+#cardWrap {
+  width: 90%;
+  max-width: 520px;
+  height: 320px;
+  display: flex;
+  align-items: center;       /* Center card inside wrapper */
+  justify-content: center;   /* Center card inside wrapper */
+}
+
+  #card{ width:100%; height:100%; perspective:1200px; display:flex; align-items:center; justify-content:center; }
+  #cardInner{ width:100%; height:100%; position:relative; border-radius:16px; transform-style:preserve-3d; transition:transform .72s cubic-bezier(.2,.9,.2,1); }
+  .face{ position:absolute; inset:0; border-radius:16px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:18px; backface-visibility:hidden; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); box-shadow:0 18px 40px rgba(0,0,0,.45); border:3px solid rgba(61,214,208,0.08); }
+  .front{ transform:rotateY(0deg); z-index:2; }
+  .back{ transform:rotateY(180deg); }
+  #cardInner.flipped{ transform: rotateY(180deg); }
+  .hanzi{ font-size:clamp(36px,6vw,72px); font-weight:800; line-height:1; }
+  .pinyin{ font-size:18px; color:var(--accent-2); margin-top:8px; font-weight:700; }
+  .meaning{ font-size:clamp(24px,4.5vw,42px); text-align:center; color:var(--text); padding:8px; }
+
+  /* Practice */
+  #practiceScreen{ width:100%; min-height:60vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; }
+  #practiceHanzi{ font-size:clamp(40px,7vw,80px); font-weight:800; }
+  #practiceInput{ font-size:18px; padding:10px; border-radius:8px; border:none; width:220px; text-align:center; }
+  #practiceFeedback{ min-height:24px; font-size:15px; font-weight:600; transition:opacity .3s; }
+  #practiceFeedback.correct{ color:var(--success-text); }
+  #practiceFeedback.incorrect{ color:var(--error-text); }
+  #practiceControls{ display:flex; gap:10px; }
+
+  /* Center splash screen vertically and horizontally */
+.splash-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 70vh; /* centers vertically relative to viewport */
+  padding: 40px 30px;
+  gap: 24px;
+  background: linear-gradient(135deg, rgba(61,214,208,0.1), rgba(255,209,102,0.1));
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 20px;
+  box-shadow: 0 15px 40px rgba(0,0,0,0.45);
+  text-align: center;
+}
+
+.splash-card h1 {
+  font-size: clamp(36px,6vw,60px);
+  font-weight: 900;
+  margin: 0;
+  letter-spacing: 1px;
+  color: var(--accent);
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+}
+.splash-card p.lead {
+  font-size: 18px;
+  color: var(--muted);
+  max-width: 480px;
+}
+
+.splash-buttons {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.splash-buttons button {
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 12px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.splash-buttons button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div id="splash" class="card splash-card">
+  <h1>Pinyin Flashcards</h1>
+  <p class="lead">A simple and fun way to practice Chinese vocabulary.</p>
+  <div class="row splash-buttons">
+    <button id="btnToReview">Review Vocabulary</button>
+    <button id="btnStartDirect">Start</button>
+    <button id="btnStartPractice">Pinyin Practice</button>
+  </div>
+  <p class="muted">Words: <span id="vocabCount">0</span></p>
+</div>
+
+  <div id="reviewScreen" class="card hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div><h2 style="margin:0">Vocabulary Review</h2><div class="mutedSmall">Scroll to review. Expand to see more.</div></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="toggleExpand" class="expandBtn">Expand</button>
+        <button id="btnStartFromReview">Start</button>
+        <button id="btnBackToSplash" class="expandBtn">Back</button>
+      </div>
+    </div>
+    <div id="reviewContainer"><div id="reviewList"></div></div>
+  </div>
+
+  <div id="gameScreen" class="card hidden">
+    <div id="cardWrap">
+      <div id="card">
+        <div id="cardInner">
+          <div class="face front"><div class="hanzi" id="frontHanzi"></div><div class="pinyin" id="frontPinyin"></div></div>
+          <div class="face back"><div class="meaning" id="backMeaning"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="controlsGame">
+      <button id="btnFlip">Flip</button>
+      <button id="btnPlayAudio">Play Audio</button>
+      <button id="btnNext">Next</button>
+      <button id="btnShuffle">Shuffle</button>
+      <button id="btnAutoPlay">Auto Play</button>
+      <button id="btnStop">Stop</button>
+    </div>
+    <div id="progress" class="mutedSmall">0 / 0</div>
+    <div id="gameStatus" class="mutedSmall"></div>
+  </div>
+
+  <div id="practiceScreen" class="card hidden">
+    <div id="practiceHanzi"></div>
+    <input id="practiceInput" placeholder="Type Pinyin..." />
+    <div id="practiceFeedback"></div>
+    <div id="practiceControls">
+      <button id="btnPracticeSubmit">Submit</button>
+      <button id="btnPracticeStop">Stop</button>
+    </div>
+    <div id="practiceProgress" class="muted"></div>
+  </div>
+</div>
+
+<script>
+const VOCAB = [{"hanzi":"餐廳","pinyin":"can1 ting1","meaning":"restaurant"},{"hanzi":"紅燒魚","pinyin":"hong2 shao1 yu2","meaning":"soy-braised fish"},{"hanzi":"好吃","pinyin":"hao3 chi1","meaning":"delicious (for food)"},{"hanzi":"豆腐","pinyin":"dou4 fu3","meaning":"tofu"},{"hanzi":"還是","pinyin":"hai2 shi4","meaning":"or (used in questions); still"},{"hanzi":"青菜","pinyin":"qing1 cai4","meaning":"green vegetables"},{"hanzi":"炸豆腐","pinyin":"zha2 dou4 fu3","meaning":"deep-fried tofu"},{"hanzi":"炒青菜","pinyin":"chao3 qing1 cai4","meaning":"stir-fried vegetables"},{"hanzi":"白飯","pinyin":"bai2 fan4","meaning":"plain (white) rice"},{"hanzi":"酸辣湯","pinyin":"suan1 la4 tang1","meaning":"hot and sour soup"},{"hanzi":"啤酒","pinyin":"pi2 jiu3","meaning":"beer"},{"hanzi":"太好了","pinyin":"tai4 hao3 le","meaning":"great! / wonderful!"},{"hanzi":"包子","pinyin":"bao1 zi","meaning":"steamed bun"},{"hanzi":"豆沙包","pinyin":"dou4 sha1 bao1","meaning":"red bean paste bun"},{"hanzi":"那麼","pinyin":"na4 me","meaning":"then / in that case / so"},{"hanzi":"怎麼樣","pinyin":"zen3 me yang4","meaning":"how is it? / how about...?"},{"hanzi":"好喝","pinyin":"hao3 he1","meaning":"tasty (for drinks)"},{"hanzi":"點菜","pinyin":"dian3 cai4","meaning":"to order dishes"},{"hanzi":"非常","pinyin":"fei1 chang2","meaning":"very / extremely"},{"hanzi":"服務員","pinyin":"fu2 wu4 yuan2","meaning":"waiter / waitress / server"}];
+const OPTS = {};
+
+/* --- Elements --- */
+const vocabCountEl = document.getElementById('vocabCount');
+const splash = document.getElementById('splash');
+const reviewScreen = document.getElementById('reviewScreen');
+const reviewList = document.getElementById('reviewList');
+const reviewContainer = document.getElementById('reviewContainer');
+const toggleExpand = document.getElementById('toggleExpand');
+const btnStartFromReview = document.getElementById('btnStartFromReview');
+const btnBackToSplash = document.getElementById('btnBackToSplash');
+const gameScreen = document.getElementById('gameScreen');
+const cardInner = document.getElementById('cardInner');
+const frontHanziEl = document.getElementById('frontHanzi');
+const frontPinyinEl = document.getElementById('frontPinyin');
+const backMeaningEl = document.getElementById('backMeaning');
+const btnFlip = document.getElementById('btnFlip');
+const btnPlayAudio = document.getElementById('btnPlayAudio');
+const btnNext = document.getElementById('btnNext');
+const btnShuffle = document.getElementById('btnShuffle');
+const btnAutoPlay = document.getElementById('btnAutoPlay');
+const btnStop = document.getElementById('btnStop');
+const progressEl = document.getElementById('progress');
+const gameStatusEl = document.getElementById('gameStatus');
+
+// Practice elements
+const practiceScreen = document.getElementById('practiceScreen');
+const practiceHanzi = document.getElementById('practiceHanzi');
+const practiceInput = document.getElementById('practiceInput');
+const practiceFeedback = document.getElementById('practiceFeedback');
+const practiceProgress = document.getElementById('practiceProgress');
+const btnPracticeSubmit = document.getElementById('btnPracticeSubmit');
+const btnPracticeStop = document.getElementById('btnPracticeStop');
+const btnStartPractice = document.getElementById('btnStartPractice');
+
+let deck = Array.isArray(VOCAB)?VOCAB.slice():[];
+let shuffled=[]; let index=0; let isExpanded=false; let autoPlayInterval=null;
+
+// --- Utility ---
+function shuffleArray(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}}
+function escapeHtml(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+// --- Review ---
+function renderReview(){reviewList.innerHTML='';for(const w of shuffled){const d=document.createElement('div');d.className='reviewItem';d.innerHTML='<div class="reviewHanzi">'+escapeHtml(w.hanzi)+'</div><div class="reviewPinyin">'+escapeHtml(w.pinyin)+'</div><div class="reviewMean">'+escapeHtml(w.meaning||'')+'</div>';reviewList.appendChild(d);}}
+toggleExpand.addEventListener('click',()=>{if(!isExpanded){reviewContainer.style.maxHeight='85vh';toggleExpand.textContent='Collapse';}else{reviewContainer.style.maxHeight='56vh';toggleExpand.textContent='Expand';}isExpanded=!isExpanded;});
+
+// --- Game ---
+function initDeck(){shuffled=deck.slice();shuffleArray(shuffled);index=0;renderReview();updateProgress();}
+function updateProgress(){progressEl.textContent=(shuffled.length?(index+1)+' / '+shuffled.length:'0 / 0');}
+function showCard(i){if(!shuffled.length)return;const w=shuffled[i];frontHanziEl.textContent=w.hanzi||'';frontPinyinEl.textContent=w.pinyin||'';backMeaningEl.textContent=w.meaning||'';cardInner.classList.remove('flipped');updateProgress();gameStatusEl.textContent='';cardInner.parentElement.focus();}
+btnFlip.addEventListener('click',()=>{cardInner.classList.toggle('flipped');});
+function playHanziAudio(){const w=shuffled[index];if(!w)return;const u=new SpeechSynthesisUtterance(w.hanzi);u.lang='zh-CN';speechSynthesis.cancel();speechSynthesis.speak(u);}
+btnPlayAudio.addEventListener('click',playHanziAudio);
+
+function startAutoPlay(){if(autoPlayInterval)return;btnAutoPlay.textContent='Stop Auto Play';gameStatusEl.textContent='Auto Play Active';autoPlayInterval=setInterval(showNextCardAndPlayAudio,2500);showNextCardAndPlayAudio();}
+function stopAutoPlay(){if(!autoPlayInterval)return;clearInterval(autoPlayInterval);autoPlayInterval=null;btnAutoPlay.textContent='Auto Play';gameStatusEl.textContent='';}
+function showNextCardAndPlayAudio(){if(index>=shuffled.length){index=0;shuffleArray(shuffled);stopAutoPlay();gameStatusEl.textContent='End of deck. Auto-play stopped.';return;}showCard(index);playHanziAudio();index++;}
+btnAutoPlay.addEventListener('click',()=>{if(autoPlayInterval){stopAutoPlay();}else{startAutoPlay();}});
+btnNext.addEventListener('click',()=>{if(!shuffled.length)return;stopAutoPlay();index++;if(index>=shuffled.length){index=0;shuffleArray(shuffled);}showCard(index);});
+btnShuffle.addEventListener('click',()=>{stopAutoPlay();shuffleArray(shuffled);index=0;renderReview();showCard(index);});
+btnStop.addEventListener('click',()=>{stopAutoPlay();gameScreen.classList.add('hidden');reviewScreen.classList.add('hidden');splash.classList.remove('hidden');});
+
+// --- Splash / Navigation ---
+document.getElementById('btnToReview').addEventListener('click',()=>{splash.classList.add('hidden');reviewScreen.classList.remove('hidden');initDeck();renderReview();reviewContainer.scrollTop=0;});
+document.getElementById('btnStartDirect').addEventListener('click',()=>{splash.classList.add('hidden');reviewScreen.classList.add('hidden');gameScreen.classList.remove('hidden');initDeck();showCard(index);});
+btnStartFromReview.addEventListener('click',()=>{reviewScreen.classList.add('hidden');gameScreen.classList.remove('hidden');showCard(index);});
+btnBackToSplash.addEventListener('click',()=>{gameScreen.classList.add('hidden');reviewScreen.classList.add('hidden');splash.classList.remove('hidden');stopAutoPlay();});
+
+// --- Keyboard ---
+window.addEventListener('keydown',(e)=>{if(gameScreen.classList.contains('hidden'))return;if(e.key==='ArrowRight'){stopAutoPlay();btnNext.click();}else if(e.key==='ArrowLeft'){stopAutoPlay();index=Math.max(0,index-1);showCard(index);}else if(e.key===' '||e.key==='Spacebar'){e.preventDefault();btnFlip.click();}});
+document.getElementById('card').addEventListener('click',()=>{stopAutoPlay();btnFlip.click();});
+
+// --- Practice Mode ---
+let practiceWrong = [];
+let practiceIndex = 0;
+let practiceLocked = false;
+
+function normalizePinyin(p){ return p.toLowerCase().replace(/\s+/g,''); }
+
+function initPractice(){
+  practiceDeck = deck.slice();
+  shuffleArray(practiceDeck);
+  practiceWrong = [];
+  practiceIndex = 0;
+  showPracticeCard();
+}
+
+function showPracticeCard(){
+  if(practiceDeck.length===0){ practiceFeedback.textContent='Practice complete!'; practiceFeedback.className='correct'; practiceProgress.textContent='0 / 0'; return; }
+  if(practiceIndex>=practiceDeck.length){
+    if(practiceWrong.length){ practiceDeck=practiceWrong; practiceWrong=[]; practiceIndex=0; } 
+    else { practiceFeedback.textContent='Practice complete!'; practiceFeedback.className='correct'; practiceProgress.textContent='0 / 0'; return; }
+  }
+  const w = practiceDeck[practiceIndex];
+  practiceHanzi.textContent = w.hanzi || '';
+  practiceInput.value = '';
+  practiceFeedback.textContent = '';
+  practiceProgress.textContent = (practiceIndex+1)+' / '+practiceDeck.length;
+  practiceInput.disabled=false;
+  practiceInput.focus();
+  practiceLocked=false;
+}
+
+function checkPractice(){
+  if(practiceLocked) return;
+  practiceLocked=true;
+  const w = practiceDeck[practiceIndex];
+  if(!w) return;
+  const ans = normalizePinyin(practiceInput.value);
+  const correct = normalizePinyin(w.pinyin);
+  if(ans===correct){ practiceFeedback.textContent='Correct!'; practiceFeedback.className='correct'; } 
+  else { practiceFeedback.textContent='Incorrect. Correct: '+w.pinyin; practiceFeedback.className='incorrect'; practiceWrong.push(w); }
+  practiceInput.disabled=true;
+  setTimeout(()=>{ practiceIndex++; showPracticeCard(); },1000);
+}
+
+btnPracticeSubmit.addEventListener('click', checkPractice);
+practiceInput.addEventListener('keydown', e=>{ if(e.key==='Enter') checkPractice(); });
+btnPracticeStop.addEventListener('click', ()=>{ practiceScreen.classList.add('hidden'); splash.classList.remove('hidden'); });
+btnStartPractice.addEventListener('click', ()=>{ splash.classList.add('hidden'); practiceScreen.classList.remove('hidden'); initPractice(); });
+
+// --- Initialize ---
+(function init(){
+  if(!Array.isArray(deck)||deck.length===0){ deck=[{hanzi:'你',pinyin:'ni3',meaning:'you'},{hanzi:'好',pinyin:'hao3',meaning:'good'},{hanzi:'学',pinyin:'xue2',meaning:'learn'},{hanzi:'我',pinyin:'wo3',meaning:'I, me'}]; }
+  shuffled=deck.slice(); shuffleArray(shuffled); vocabCountEl.textContent=deck.length; reviewContainer.style.maxHeight='56vh'; renderReview();
+})();
+</script>
+</body>
+</html>
